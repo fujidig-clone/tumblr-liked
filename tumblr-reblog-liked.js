@@ -8,7 +8,7 @@ var ORIGIN = "http://www.tumblr.com";
 function readLikedPostsWithTumblelogDocument(doc, cont) {
 	var posts = doc.querySelectorAll("#posts .post.is_reblog.is_mine");
 	var urls = Array.map(posts, function(post)
-		return post.querySelector(".post_info a").getAttribute("href"));
+		post.querySelector(".post_info a").getAttribute("href"));
 	var urlsRegexp = "^(?:" + Array.map(urls, function(url) url.replace(/\W/g,'\\$&')).join("|") + ")";
 	readLikedPostsWithPredicate(function (allPosts, posts) {
 		for (var i = 0; i < post.length; i ++) {
