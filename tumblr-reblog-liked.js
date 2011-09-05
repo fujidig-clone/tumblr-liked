@@ -13,7 +13,41 @@ function reblogAll(posts, cont) {
 	}
 }
 
+// documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
+// 自分のtumblelogのdocumentを指定して、
+// 既にリブログ済みのポストに到達するまでーということをやるために
+function readLikedPostsWithTumblelogDocument(doc, cont) {
+	var posts = doc.querySelectorAll("#posts .post.is_reblog.is_mine");
+	var urls = Array.map(posts, function(post)
+		return post.querySelector(".post_info a").getAttribute("href"));
+	var urlsRegexp = "^(?:" + Array.map(urls, function(url) url.replace(/\W/g,'\\$&')).join("|") + ")";
+	readLikedPostsWithPredicate(function (allPosts, posts) {
+		for (var i = 0; i < post.length; i ++) {
+			if (urlsRegexp.test(getPermalinkURL(posts[i]))) {
+				break;
+			}
+		}
+		if (i < post.length) {
+			var numExtra = post.length - i;
+			allPosts.length -= numExtra;
+			return true;
+		}
+		return false;
+	}, cont);
+}
+
 function readLikedPosts(num, cont) {
+	function predicate(allPosts, posts) {
+		if (allPosts.length >= num) {
+			allPosts.length = num;
+			return true;
+		}
+		return false;
+	}
+	readLikedPostsWithPredicate(predicate, cont);
+}
+
+function readLikedPostsWithPredicate(predicate, cont) {
 	var allPosts = [];
 	loop(1);
 	function loop(page) {
@@ -21,8 +55,7 @@ function readLikedPosts(num, cont) {
 			var doc = convertToHTMLDocument(res.responseText);
 			var posts = doc.querySelectorAll("#posts .post");
 			allPosts.push.apply(allPosts, posts);
-			if (allPosts.length >= num) {
-				allPosts.length = num;
+			if (predicate(allPosts, posts)) {
 				cont(allPosts);
 			} else if (!doc.querySelector("#next_page_link")) {
 				cont(allPosts);
@@ -97,6 +130,10 @@ function detectVideoURLs(postElem) {
 	if (!script) return [];
 	var matched = script.textContent.match(/^renderVideo\("[^"]+",'([^']+)'/);
 	return matched ? [matched[1]] : [];
+}
+
+function getPermalinkURL(postElem) {
+	return postElem.querySelector("a[id^=permalink_]").getAttribute("href");
 }
 
 function formToKeyValueStore(form) {
