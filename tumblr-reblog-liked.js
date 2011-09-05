@@ -9,15 +9,16 @@ function readLikedPostsWithTumblelogDocument(doc, cont) {
 	var posts = doc.querySelectorAll("#posts .post.is_reblog.is_mine");
 	var urls = Array.map(posts, function(post)
 		post.querySelector(".post_info a").getAttribute("href"));
-	var urlsRegexp = "^(?:" + Array.map(urls, function(url) url.replace(/\W/g,'\\$&')).join("|") + ")";
+	var urlsRegexp = new RegExp("^(?:" + Array.map(urls, function(url)
+					url.replace(/\W/g,'\\$&')).join("|") + ")");
 	readLikedPostsWithPredicate(function (allPosts, posts) {
-		for (var i = 0; i < post.length; i ++) {
+		for (var i = 0; i < posts.length; i ++) {
 			if (urlsRegexp.test(getPermalinkURL(posts[i]))) {
 				break;
 			}
 		}
-		if (i < post.length) {
-			var numExtra = post.length - i;
+		if (i < posts.length) {
+			var numExtra = posts.length - i;
 			allPosts.length -= numExtra;
 			return true;
 		}
