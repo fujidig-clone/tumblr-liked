@@ -97,6 +97,14 @@ function reblogByURL(reblogURL, cont) {
 	}
 }
 
+function downloadPosts(posts, dir) {
+	posts.forEach(function (post) {
+		detectPhotoURLs(post).forEach(function (url) {
+			download(url, dir);
+		});
+	});
+}
+
 function detectMediaURLs(postElem) {
 	if (postElem.classList.contains("photo")) {
 		return detectPhotoURLs(postElem);
