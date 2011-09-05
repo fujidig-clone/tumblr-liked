@@ -2,17 +2,6 @@ var libly = liberator.plugins.libly;
 
 var ORIGIN = "http://www.tumblr.com";
 
-function reblogAll(posts, cont) {
-	var index = 0;
-	loop();
-	function loop() {
-		if (index >= posts.length) {
-			cont();
-		}
-		reblog(posts[index++], loop);
-	}
-}
-
 // documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
 // 自分のtumblelogのdocumentを指定して、
 // 既にリブログ済みのポストに到達するまでーということをやるために
@@ -66,6 +55,16 @@ function readLikedPostsWithPredicate(predicate, cont) {
 	}
 }
 
+function reblogAll(posts, cont) {
+	var index = 0;
+	loop();
+	function loop() {
+		if (index >= posts.length) {
+			cont();
+		}
+		reblog(posts[index++], loop);
+	}
+}
 
 function reblog(postElem, cont) {
 	var anchors = postElem.querySelectorAll("a");
