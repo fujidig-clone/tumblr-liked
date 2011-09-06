@@ -57,11 +57,14 @@ GUI.prototype._start_onTabLoad = function(event) {
 		  td.img { font-size: 30px; }
 		  th { font-size: 20px; padding-left: 20px; padding-right: 20px; }
 		  th, td { text-align: center; }
-		  td.done { background-color: #CDF4BE; }
+		  td.download { text-align: right; }
+		  td.download .progress { display: inline-block; width: 100px; }
+		  .done { background-color: #CDF4BE; }
 		  button { font-size: 50px };
 		  /*]]>*/
 		</style>
 		<h1>{TITLE}</h1>
+		Directory to save: <input type="text" size="40" id="directory"/><br/>
 		<button disabled="disabled">Run!</button>
 		<table>
 		<thead><tr><th/><th>Reblog</th><th>Download</th></tr></thead>
@@ -69,6 +72,7 @@ GUI.prototype._start_onTabLoad = function(event) {
 		</table>
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
+	this.doc.querySelector("#directory").value = io.getCurrentDirectory().path;
 	readLikedPosts(20, this._start_onReceivePosts.bind(this));
 };
 
@@ -78,40 +82,30 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 	var self = this;
 	var posts = this.posts = [];
 	postElems.forEach(function (postElem) {
-		var mediaURLs = detectMediaURLs(postElem);
-		var tr = self.buildPostTr(postElem, mediaURLs);
-		tbody.appendChild(tr);
-		var reblogProgressElem = tr.childNodes[1];
-		var downloadProgressElem = tr.childNodes[2];
-		posts.push(new GUI.Post(postElem, reblogProgressElem, downloadProgressElem, mediaURLs));
+		var post = GUI.Post.build(self, postElem);
+		tbody.appendChild(post.tr);
+		posts.push(post);
 	});
 	var button = this.doc.querySelector("button");
 	button.disabled = false;
-	button.addEventListener("click", this.runReblog.bind(this), false);
+	button.addEventListener("click", this.run.bind(this), false);
 };
 
-GUI.prototype.buildPostTr = function(postElem, mediaURLs) {
-	var url = getPermalinkURL(postElem);
-	var tr = <tr><td class="img"/><td/><td/></tr>;
-	var imgTd = tr.td[0];
-	var dlTd = tr.td[2];
-	var imgContainer = <a href={url}/>;
-	imgTd.appendChild(imgContainer);
-
-	detectThumbnailURLs(postElem).forEach(function(url)
-		imgContainer.appendChild(<img src={url}/>));
-	if (imgContainer.children().length() === 0) {
-		imgContainer.appendChild("(" + getPostType(postElem) + ")");
-	}
-
-	mediaURLs.forEach(function (url) {
-		var fileName = getDefaultFileName(null, makeURI(url));
-		dlTd.appendChild(<><a href={url}>{fileName}</a><br/></>);
-	});
-	return this.toDOM(tr);
+GUI.prototype.run = function() {
+	var dir = this.doc.querySelector("#directory").value;
+	this.runReblog();
+	this.runDownload(dir);
 };
 
 GUI.prototype.runReblog = function() {
+	this.doAsyncProcessEachPosts(function(post, k) post.reblog(k));
+};
+
+GUI.prototype.runDownload = function(dir) {
+	this.doAsyncProcessEachPosts(function(post, k) post.download(dir, k));
+};
+
+GUI.prototype.doAsyncProcessEachPosts = function(process) {
 	var posts = this.posts;
 	loop(0);
 	function loop(index) {
@@ -119,7 +113,7 @@ GUI.prototype.runReblog = function() {
 			return;
 		}
 		var post = posts[index];
-		post.reblog(function() loop(index + 1));
+		process(post, function() loop(index + 1));
 	}
 };
 
@@ -127,11 +121,48 @@ GUI.prototype.toDOM = function(xml) {
 	return util.xmlToDom(xml, this.doc);
 };
 
-GUI.Post = function(postElem, reblogProgressElem, downloadProgressElem, mediaURLs) {
+GUI.Post = function(postElem, tr, reblogProgressElem, media) {
 	this.postElem = postElem;
+	this.tr = tr;
 	this.reblogProgressElem = reblogProgressElem;
-	this.downloadProgressElem;
-	this.mediaURLs = mediaURLs;
+	this.media = media;
+};
+
+GUI.Post.build = function(gui, postElem) {
+	var url = getPermalinkURL(postElem);
+	var tr = <tr><td class="img"/><td class="reblog"/><td class="download"/></tr>;
+	var imgTd = tr.td[0];
+	var dlTd = tr.td[2];
+	var imgContainer = <a href={url}/>;
+	imgTd.appendChild(imgContainer);
+
+	var thumbnailURLs = detectThumbnailURLs(postElem);
+	thumbnailURLs.forEach(function(url)
+		imgContainer.appendChild(<img src={url}/>));
+	if (thumbnailURLs.length === 0) {
+		imgContainer.appendChild("(" + getPostType(postElem) + ")");
+	}
+
+	var mediaURLs = detectMediaURLs(postElem);
+	mediaURLs.forEach(function (url) {
+		var fileName = getDefaultFileName(null, makeURI(url));
+		dlTd.appendChild(<><a href={url}>{fileName}</a><span class="progress"></span><br/></>);
+	});
+	if (mediaURLs.length === 0) {
+		dlTd.appendChild(<>(None)<span class="progress"></span></>);
+	}
+
+	var trNode = gui.toDOM(tr);
+	var reblogProgressElem = trNode.childNodes[1];
+	var downloadProgressElems = trNode.querySelectorAll("td.download .progress");
+	var media = mediaURLs.map(function (url, i) {
+		return {
+			url: url,
+			progressElem: downloadProgressElems[i]
+		};
+	});
+
+	return new GUI.Post(postElem, trNode, reblogProgressElem, media);
 };
 
 GUI.Post.prototype.reblog = function(cont) {
@@ -141,6 +172,31 @@ GUI.Post.prototype.reblog = function(cont) {
 	reblog(this.postElem, function() {
 		replaceElemText(progress, "Reblogged");
 		progress.classList.add("done");
+		cont();
+	});
+};
+
+GUI.Post.prototype.download = function(dir, cont) {
+	var self = this;
+	var failed = false;
+	asyncEach(this.media, function(m, k) {
+		download(m.url, dir, progress, function (success) {
+			if (success) {
+				replaceElemText(m.progressElem, "complete");
+				m.progressElem.classList.add("done");
+			} else {
+				replaceElemText(m.progressElem, "failed");
+				failed = true;
+			}
+			k();
+		});
+		function progress(cur, max) {
+			replaceElemText(m.progressElem, (cur / max * 100).toFixed(1) + " %");
+		}
+	}, function() {
+		if (!failed) {
+			self.tr.querySelector("td.download").classList.add("done");
+		}
 		cont();
 	});
 };
@@ -319,11 +375,21 @@ function replaceElemText(node, text) {
 	node.appendChild(doc.createTextNode(text));
 }
 
+function asyncEach(array, callback, cont) {
+	loop(0);
+	function loop(index) {
+		if (index >= array.length) {
+			cont();
+		} else {
+			callback(array[index], function() loop(index + 1));
+		}
+	}
+}
+
 // downloadURL()はディレクトリを指定する機能がないため使えない
-function download(url, dir) {
+function download(url, dir, progress, cont) {
 	var uri = makeURI(url);
 	var fileName = getDefaultFileName(null, uri);
-	var downloadManager = Cc["@mozilla.org/download-manager;1"].getService(Ci.nsIDownloadManager);
 	var persist = makeWebBrowserPersist();
 	var file = services.create("file");
 	file.initWithPath(dir);
@@ -333,9 +399,25 @@ function download(url, dir) {
 	//   取り除いてみても変化なく、上書きされた)
 	file = uniqueFile(file);
 	var fileuri = makeFileURI(file);
+
+	var downloadManager = Cc["@mozilla.org/download-manager;1"].getService(Ci.nsIDownloadManager);
 	var download = downloadManager.addDownload(0, uri, fileuri, null, null, null, null, null, persist);
-	persist.progressListener = download;
+	persist.progressListener = {
+		onProgressChange: onProgressChange,
+		onStateChange: onStateChange
+	};
 	persist.saveURI(uri, null, null, null, null, file);
+
+	function onProgressChange(aWebProgress, aRequest, aCurSelfProgress, aMaxSelfProgress, aCurTotalProgress, aMaxTotalProgress) {
+		download.onProgressChange.apply(this, arguments);
+		if (progress) progress(aCurTotalProgress, aMaxTotalProgress);
+	}
+	function onStateChange(aWebProgress, aRequest, aStateFlags, aStatus) {
+		download.onStateChange.apply(this, arguments);
+		if (aStateFlags & Ci.nsIWebProgressListener.STATE_STOP) {
+			if (cont) cont(aStatus === 0);
+		}
+	}
 }
 
 // libly.Response#getHTMLDocumentを使うと相対リンクで問題が起こるため
