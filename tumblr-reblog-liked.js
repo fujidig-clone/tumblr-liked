@@ -11,29 +11,12 @@ function readLikedPostsWithTumblelogDocument(doc, cont) {
 		post.querySelector(".post_info a").getAttribute("href"));
 	var urlsRegexp = new RegExp("^(?:" + Array.map(urls, function(url)
 					url.replace(/\W/g,'\\$&')).join("|") + ")");
-	readLikedPostsWithPredicate(function (allPosts, posts) {
-		for (var i = 0; i < posts.length; i ++) {
-			if (urlsRegexp.test(getPermalinkURL(posts[i]))) {
-				break;
-			}
-		}
-		if (i < posts.length) {
-			var numExtra = posts.length - i;
-			allPosts.length -= numExtra;
-			return true;
-		}
-		return false;
-	}, cont);
+	readLikedPostsWithPredicate(function (allPosts, post)
+		urlsRegexp.test(getPermalinkURL(post)), cont);
 }
 
 function readLikedPosts(num, cont) {
-	function predicate(allPosts, posts) {
-		if (allPosts.length >= num) {
-			allPosts.length = num;
-			return true;
-		}
-		return false;
-	}
+	var predicate = function(allPosts, post) allPosts.length >= num;
 	readLikedPostsWithPredicate(predicate, cont);
 }
 
@@ -44,10 +27,14 @@ function readLikedPostsWithPredicate(predicate, cont) {
 		accessPage(ORIGIN + "/likes/page/" + page, {}, function(res) {
 			var doc = convertToHTMLDocument(res.responseText);
 			var posts = doc.querySelectorAll("#posts .post");
-			allPosts.push.apply(allPosts, posts);
-			if (predicate(allPosts, posts)) {
-				cont(allPosts);
-			} else if (!doc.querySelector("#next_page_link")) {
+			
+			for (var i = 0; i < posts.length; i ++) {
+				if (predicate(allPosts, posts[i])) {
+					break;
+				}
+				allPosts.push(posts[i]);
+			}
+			if (i < posts.length || !doc.querySelector("#next_page_link")) {
 				cont(allPosts);
 			} else {
 				loop(page + 1);
