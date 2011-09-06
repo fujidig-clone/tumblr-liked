@@ -2,6 +2,38 @@ var libly = liberator.plugins.libly;
 
 var ORIGIN = "http://www.tumblr.com";
 
+var GUI = {};
+
+GUI.start = function () {
+	var tab = gBrowser.getBrowserForTab(gBrowser.addTab(""));
+	tab.addEventListener("load", onLoad, true);
+	var doc;
+	function onLoad() {
+		doc = tab.contentDocument;
+		var html = <>
+			<title>{__context__.NAME}</title>
+			<h1>{__context__.NAME}</h1>
+			<ul>
+			</ul>
+		</>;
+		doc.documentElement.appendChild(util.xmlToDom(html, doc));
+		readLikedPosts(10, onReceivePosts);
+	}
+	function onReceivePosts(posts) {
+		var ul = doc.querySelector("ul");
+		posts.forEach(function (post) {
+			var url = getPermalinkURL(post);
+			var li = <li></li>;
+			detectThumbnailURLs(post).forEach(function(url)
+				li.appendChild(<img src={url} />));
+			if (li.children().length() === 0) {
+				li.appendChild("(" + getPostType(post) + ")");
+			}
+			ul.appendChild(util.xmlToDom(li, doc));
+		});
+	}
+};
+
 // documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
 // 自分のtumblelogのdocumentを指定して、
 // 既にリブログ済みのポストに到達するまでーということをやるために
@@ -92,6 +124,14 @@ function downloadPosts(posts, dir) {
 	});
 }
 
+function detectThumbnailURLs(postElem) {
+	if (getPostType(postElem) !== "photo") return [];
+	return Array.map(postElem.querySelectorAll("img"), function(img) {
+		var url = img.getAttribute("src")
+		return url.replace(/_(250|500)\./, "_100.")
+	});
+}
+
 function detectMediaURLs(postElem) {
 	if (postElem.classList.contains("photo")) {
 		return detectPhotoURLs(postElem);
@@ -129,6 +169,12 @@ function detectVideoURLs(postElem) {
 
 function getPermalinkURL(postElem) {
 	return postElem.querySelector("a[id^=permalink_]").getAttribute("href");
+}
+
+function getPostType(postElem) {
+	var typesRegexp = /\b(text|quote|link|answer|video|audio|photo)\b/;
+	liberator.log(uneval(postElem.className));
+	return postElem.className.match(typesRegexp)[0];
 }
 
 function formToKeyValueStore(form) {
