@@ -1,37 +1,148 @@
 var libly = liberator.plugins.libly;
 
 var ORIGIN = "http://www.tumblr.com";
+var TITLE = __context__.NAME;
 
-var GUI = {};
+if (__context__.DEBUG) {
+	TITLE += " (DEBUG)";
+	setTimeout(function() { GUI.start() });
+	// デバッグ中サーバーに負荷をかけないようにcacheする
+	accessPage = function(url, opts, cont) {
+		if (!__context__.CACHE) __context__.CACHE = {};
+		var CACHE = __context__.CACHE;
+		if (CACHE[url]) {
+			liberator.log("CACHE HIT: "+url);
+			setTimeout(function() cont(CACHE[url]));
+			return;
+		}
 
-GUI.start = function () {
-	var tab = gBrowser.getBrowserForTab(gBrowser.addTab(""));
-	tab.addEventListener("load", onLoad, true);
-	var doc;
-	function onLoad() {
-		doc = tab.contentDocument;
-		var html = <>
-			<title>{__context__.NAME}</title>
-			<h1>{__context__.NAME}</h1>
-			<ul>
-			</ul>
-		</>;
-		doc.documentElement.appendChild(util.xmlToDom(html, doc));
-		readLikedPosts(10, onReceivePosts);
-	}
-	function onReceivePosts(posts) {
-		var ul = doc.querySelector("ul");
-		posts.forEach(function (post) {
-			var url = getPermalinkURL(post);
-			var li = <li></li>;
-			detectThumbnailURLs(post).forEach(function(url)
-				li.appendChild(<img src={url} />));
-			if (li.children().length() === 0) {
-				li.appendChild("(" + getPostType(post) + ")");
-			}
-			ul.appendChild(util.xmlToDom(li, doc));
+		var req = new libly.Request(url, {}, opts);
+		req.addEventListener("onSuccess", function(res) {
+			CACHE[url] = res;
+			liberator.log("CACHE STORE: "+url);
+			cont(res);
 		});
+		req.addEventListener("onFailure", function() {
+			throw new Error("failed to access " + url);
+		});
+		req._request(opts.method || "GET");
+	};
+	// リブログは実際に行わない
+	reblogByURL = function(reblogURL, cont) {
+		liberator.log("[DUMMY] reblogging "+reblogURL);
+		setTimeout(cont, 50);
+	};
+}
+
+var GUI = function () {
+	this.doc = null;
+	this.posts = null;
+};
+
+GUI.start = function() {
+	new GUI().start();
+};
+
+GUI.prototype.start = function() {
+	var tab = gBrowser.getBrowserForTab(gBrowser.addTab(""));
+	tab.addEventListener("load", this._start_onTabLoad.bind(this), true);
+};
+
+GUI.prototype._start_onTabLoad = function(event) {
+	this.doc = event.target;
+	var html = <>
+		<title>{TITLE}</title>
+		<style type="text/css">
+		  /*<![CDATA[*/
+		  td.img { font-size: 30px; }
+		  th { font-size: 20px; padding-left: 20px; padding-right: 20px; }
+		  th, td { text-align: center; }
+		  td.done { background-color: #CDF4BE; }
+		  button { font-size: 50px };
+		  /*]]>*/
+		</style>
+		<h1>{TITLE}</h1>
+		<button disabled="disabled">Run!</button>
+		<table>
+		<thead><tr><th/><th>Reblog</th><th>Download</th></tr></thead>
+		<tbody/>
+		</table>
+	</>;
+	this.doc.documentElement.appendChild(this.toDOM(html));
+	readLikedPosts(20, this._start_onReceivePosts.bind(this));
+};
+
+GUI.prototype._start_onReceivePosts = function(postElems) {
+	postElems = postElems.reverse(); // 古い順に
+	var tbody = this.doc.querySelector("tbody");
+	var self = this;
+	var posts = this.posts = [];
+	postElems.forEach(function (postElem) {
+		var mediaURLs = detectMediaURLs(postElem);
+		var tr = self.buildPostTr(postElem, mediaURLs);
+		tbody.appendChild(tr);
+		var reblogProgressElem = tr.childNodes[1];
+		var downloadProgressElem = tr.childNodes[2];
+		posts.push(new GUI.Post(postElem, reblogProgressElem, downloadProgressElem, mediaURLs));
+	});
+	var button = this.doc.querySelector("button");
+	button.disabled = false;
+	button.addEventListener("click", this.runReblog.bind(this), false);
+};
+
+GUI.prototype.buildPostTr = function(postElem, mediaURLs) {
+	var url = getPermalinkURL(postElem);
+	var tr = <tr><td class="img"/><td/><td/></tr>;
+	var imgTd = tr.td[0];
+	var dlTd = tr.td[2];
+	var imgContainer = <a href={url}/>;
+	imgTd.appendChild(imgContainer);
+
+	detectThumbnailURLs(postElem).forEach(function(url)
+		imgContainer.appendChild(<img src={url}/>));
+	if (imgContainer.children().length() === 0) {
+		imgContainer.appendChild("(" + getPostType(postElem) + ")");
 	}
+
+	mediaURLs.forEach(function (url) {
+		var fileName = getDefaultFileName(null, makeURI(url));
+		dlTd.appendChild(<><a href={url}>{fileName}</a><br/></>);
+	});
+	return this.toDOM(tr);
+};
+
+GUI.prototype.runReblog = function() {
+	var posts = this.posts;
+	loop(0);
+	function loop(index) {
+		if (index >= posts.length) {
+			return;
+		}
+		var post = posts[index];
+		post.reblog(function() loop(index + 1));
+	}
+};
+
+GUI.prototype.toDOM = function(xml) {
+	return util.xmlToDom(xml, this.doc);
+};
+
+GUI.Post = function(postElem, reblogProgressElem, downloadProgressElem, mediaURLs) {
+	this.postElem = postElem;
+	this.reblogProgressElem = reblogProgressElem;
+	this.downloadProgressElem;
+	this.mediaURLs = mediaURLs;
+};
+
+GUI.Post.prototype.reblog = function(cont) {
+	var self = this;
+	var progress = this.reblogProgressElem;
+	replaceElemText(progress, "Reblogging...");
+	reblog(this.postElem, function() {
+		replaceElemText(progress, "Reblogged");
+		progress.classList.add("done");
+		cont();
+	});
 };
 
 // documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
@@ -147,8 +258,8 @@ function detectPhotoURLs(postElem) {
 	var highResLink = postElem.querySelector("a[id^=high_res_link_]");
 	if (highResLink) {
 		urls.push(highResLink.getAttribute("href"));
-	} else if (postElem.querySelector("photoset_row")) {
-		Array.forEach(postElem.querySelectorAll("photoset_row a"), function(a) {
+	} else if (postElem.querySelector(".photoset_row")) {
+		Array.forEach(postElem.querySelectorAll(".photoset_row a"), function(a) {
 			urls.push(a.getAttribute("href"));
 		});
 	} else {
@@ -173,7 +284,6 @@ function getPermalinkURL(postElem) {
 
 function getPostType(postElem) {
 	var typesRegexp = /\b(text|quote|link|answer|video|audio|photo)\b/;
-	liberator.log(uneval(postElem.className));
 	return postElem.className.match(typesRegexp)[0];
 }
 
@@ -201,6 +311,12 @@ function accessPage(url, opts, cont) {
 		throw new Error("failed to access " + url);
 	});
 	req._request(opts.method || "GET");
+}
+
+function replaceElemText(node, text) {
+	var doc = node.ownerDocument;
+	node.innerHTML = "";
+	node.appendChild(doc.createTextNode(text));
 }
 
 // downloadURL()はディレクトリを指定する機能がないため使えない
