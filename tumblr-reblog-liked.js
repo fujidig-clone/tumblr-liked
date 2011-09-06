@@ -386,7 +386,7 @@ function asyncEach(array, callback, cont) {
 	}
 }
 
-// downloadURL()はディレクトリを指定する機能がないため使えない
+// saveURL()はディレクトリを指定する機能がないため使えない
 function download(url, dir, progress, cont) {
 	var uri = makeURI(url);
 	var fileName = getDefaultFileName(null, uri);
