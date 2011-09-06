@@ -421,7 +421,7 @@ function download(url, dir, progress, cont) {
 }
 
 // libly.Response#getHTMLDocumentを使うと相対リンクで問題が起こるため
-// TombooのconvertToHTMLDocumentで代用
+// TomblooのconvertToHTMLDocumentで代用
 //
 // from https://github.com/to/tombloo/blob/master/xpi/chrome/content/library/01_utility.js
 function convertToHTMLDocument(html, doc) {
