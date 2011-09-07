@@ -3,6 +3,8 @@ var libly = liberator.plugins.libly;
 var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
 
+var DEFAULT_POSTS_NUM = 5;
+
 commands.add(
 	["tumblrliked"],
 	"Reblog and Download tumblr liked posts",
@@ -51,7 +53,7 @@ if (__context__.DEBUG) {
 }
 
 var GUI = function (funcToReadPost) {
-	this.funcToReadPost = funcToReadPost || readLikedPosts.bind(null, 5);
+	this.funcToReadPost = funcToReadPost || readLikedPosts.bind(null, DEFAULT_POSTS_NUM);
 	this.doc = null;
 	this.posts = null;
 };
