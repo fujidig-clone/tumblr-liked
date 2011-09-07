@@ -14,8 +14,6 @@ commands.add(
 			funcToReadPost = readLikedPosts.bind(null, num);
 		} else if (content.location.href.indexOf(ORIGIN+"/tumblelog/") === 0) {
 			funcToReadPost = readLikedPostsWithTumblelogDocument.bind(null, content.document);
-		} else {
-			liberator.echoerr("Specify number arguments or open tumblelog page beforehand.");
 		}
 		GUI.start(funcToReadPost);
 	},
