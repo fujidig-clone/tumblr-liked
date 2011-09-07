@@ -4,6 +4,7 @@ var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
 
 var DEFAULT_POSTS_NUM = 5;
+var REBLOG_INTERVAL_SEC = 3;
 
 commands.add(
 	["tumblrliked"],
@@ -121,7 +122,15 @@ GUI.prototype.run = function() {
 };
 
 GUI.prototype.runReblog = function() {
-	this.doAsyncProcessEachPosts(function(post, k) post.reblog(k));
+	var first = true;
+	this.doAsyncProcessEachPosts(function(post, k) {
+		if (first) {
+			first = false;
+			post.reblog(k);
+		} else {
+			setTimeout(function() post.reblog(k), REBLOG_INTERVAL_SEC * 1000);
+		}
+	});
 };
 
 GUI.prototype.runDownload = function(dir) {
