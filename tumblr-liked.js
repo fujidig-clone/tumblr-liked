@@ -91,9 +91,13 @@ GUI.prototype._start_onTabLoad = function(event) {
 		</table>
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
-	this.doc.querySelector("#directory").value = io.getCurrentDirectory().path;
+	this.doc.querySelector("#directory").value = this.getDefaultDirectory();
 	(this.funcToReadPost)(this._start_onReceivePosts.bind(this));
 };
+
+GUI.prototype.getDefaultDirectory = function() {
+	return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
+}
 
 GUI.prototype._start_onReceivePosts = function(postElems) {
 	postElems = postElems.reverse(); // 古い順に
