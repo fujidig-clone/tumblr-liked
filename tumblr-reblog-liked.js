@@ -3,6 +3,24 @@ var libly = liberator.plugins.libly;
 var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
 
+commands.add(
+	["tumblrliked"],
+	"Reblog and Download tumblr liked posts",
+	function (args) {
+		var arg = args[0];
+		var num = arg && /^\d+$/.test(arg) ? Number(arg) : null;
+		var funcToReadPost;
+		if (num !== null) {
+			funcToReadPost = readLikedPosts.bind(null, num);
+		} else if (content.location.href.indexOf(ORIGIN+"/tumblelog/") === 0) {
+			funcToReadPost = readLikedPostsWithTumblelogDocument.bind(null, content.document);
+		} else {
+			liberator.echoerr("Specify number arguments or open tumblelog page beforehand.");
+		}
+		GUI.start(funcToReadPost);
+	},
+	{argCount: "?"}, true);
+
 if (__context__.DEBUG) {
 	TITLE += " (DEBUG)";
 	setTimeout(function() { GUI.start() });
@@ -34,13 +52,14 @@ if (__context__.DEBUG) {
 	};
 }
 
-var GUI = function () {
+var GUI = function (funcToReadPost) {
+	this.funcToReadPost = funcToReadPost || readLikedPosts.bind(null, 5);
 	this.doc = null;
 	this.posts = null;
 };
 
-GUI.start = function() {
-	new GUI().start();
+GUI.start = function(funcToReadPost) {
+	new GUI(funcToReadPost).start();
 };
 
 GUI.prototype.start = function() {
@@ -73,7 +92,7 @@ GUI.prototype._start_onTabLoad = function(event) {
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
 	this.doc.querySelector("#directory").value = io.getCurrentDirectory().path;
-	readLikedPosts(20, this._start_onReceivePosts.bind(this));
+	(this.funcToReadPost)(this._start_onReceivePosts.bind(this));
 };
 
 GUI.prototype._start_onReceivePosts = function(postElems) {
