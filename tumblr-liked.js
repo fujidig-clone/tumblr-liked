@@ -1,4 +1,25 @@
-var libly = liberator.plugins.libly;
+
+wholeBlock: {
+
+if (!plugins.libly) {
+	liberator.echoerr(__context__.NAME + ": Please install _libly.js.");
+	break wholeBlock;
+}
+
+if (!window.MochiKit) {
+	commandline.echo(<>{__context__.NAME}:<br/>
+	                  Please download MochiKit.js,<br/>
+	                  and save as _MochiKit.js into the plugin directory<br/>
+	                  <a href="http://mochi.github.com/mochikit/">http://mochi.github.com/mochikit/</a></>,
+	                commandline.HL_ERRORMSG, commandline.APPEND_TO_MESSAGES);
+	break wholeBlock;
+}
+
+var libly = plugins.libly;
+var Async = window.MochiKit.Async;
+var Deferred = Async.Deferred;
+var DeferredList = Async.DeferredList;
+var doXHR = Async.doXHR;
 
 var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
@@ -23,34 +44,32 @@ commands.add(
 	{argCount: "?"}, true);
 
 if (__context__.DEBUG) {
-	TITLE += " (DEBUG)";
-	setTimeout(function() { GUI.start() });
-	// デバッグ中サーバーに負荷をかけないようにcacheする
-	accessPage = function(url, opts, cont) {
-		if (!__context__.CACHE) __context__.CACHE = {};
-		var CACHE = __context__.CACHE;
-		if (CACHE[url]) {
-			liberator.log("CACHE HIT: "+url);
-			setTimeout(function() cont(CACHE[url]));
-			return;
-		}
+	setTimeout(function() {
+		TITLE += " (DEBUG)";
+		// デバッグ中サーバーに負荷をかけないようにcacheする
+		doXHR = function(url, opts) {
+			if (!__context__.CACHE) __context__.CACHE = {};
+			var CACHE = __context__.CACHE;
+			if (CACHE[url]) {
+				liberator.log("CACHE HIT: "+url);
+				return Async.wait(0, CACHE[url]);
+			}
 
-		var req = new libly.Request(url, {}, opts);
-		req.addEventListener("onSuccess", function(res) {
-			CACHE[url] = res;
-			liberator.log("CACHE STORE: "+url);
-			cont(res);
-		});
-		req.addEventListener("onFailure", function() {
-			throw new Error("failed to access " + url);
-		});
-		req._request(opts.method || "GET");
-	};
-	// リブログは実際に行わない
-	reblogByURL = function(reblogURL, cont) {
-		liberator.log("[DUMMY] reblogging "+reblogURL);
-		setTimeout(cont, 50);
-	};
+			var d = Async.doXHR(url, opts);
+			d.callback = function(res) {
+				CACHE[url] = res;
+				liberator.log("CACHE STORE: "+url);
+				return Deferred.prototype.callback.apply(this, arguments);
+			};
+			return d;
+		};
+		// リブログは実際に行わない
+		reblogByURL = function(reblogURL) {
+			liberator.log("[DUMMY] reblogging "+reblogURL);
+			return Async.wait(0);
+		};
+		GUI.start();
+	});
 }
 
 var GUI = function (funcToReadPost) {
@@ -93,7 +112,7 @@ GUI.prototype._start_onTabLoad = function(event) {
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
 	this.doc.querySelector("#directory").value = this.getDefaultDirectory();
-	(this.funcToReadPost)(this._start_onReceivePosts.bind(this));
+	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this));
 };
 
 GUI.prototype.getDefaultDirectory = function() {
@@ -117,35 +136,39 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 
 GUI.prototype.run = function() {
 	var dir = this.doc.querySelector("#directory").value;
-	this.runReblog();
-	this.runDownload(dir);
+	var deferredList = new DeferredList([this.runReblog, this.runDownload(dir)],
+	                                    false, true, false,
+		                            function(d) d.list.forEach(function(e) e.cancel()));
+	deferredList.addCallback(function() {
+		alert("finish");
+	});
 };
 
 GUI.prototype.runReblog = function() {
 	var first = true;
-	this.doAsyncProcessEachPosts(function(post, k) {
+	return this.doAsyncProcessEachPosts(function(post) {
 		if (first) {
 			first = false;
-			post.reblog(k);
+			return post.reblog();
 		} else {
-			setTimeout(function() post.reblog(k), REBLOG_INTERVAL_SEC * 1000);
+			return Async.callLater(REBLOG_INTERVAL_SEC * 1000, post.reblog.bind(post));
 		}
 	});
 };
 
 GUI.prototype.runDownload = function(dir) {
-	this.doAsyncProcessEachPosts(function(post, k) post.download(dir, k));
+	return this.doAsyncProcessEachPosts(function(post) post.download(dir));
 };
 
 GUI.prototype.doAsyncProcessEachPosts = function(process) {
 	var posts = this.posts;
-	loop(0);
+	return loop(0);
 	function loop(index) {
 		if (index >= posts.length) {
 			return;
 		}
 		var post = posts[index];
-		process(post, function() loop(index + 1));
+		return process(post).addCallback(loop, index + 1);
 	}
 };
 
@@ -197,22 +220,22 @@ GUI.Post.build = function(gui, postElem) {
 	return new GUI.Post(postElem, trNode, reblogProgressElem, media);
 };
 
-GUI.Post.prototype.reblog = function(cont) {
+GUI.Post.prototype.reblog = function() {
 	var self = this;
 	var progress = this.reblogProgressElem;
 	replaceElemText(progress, "Reblogging...");
-	reblog(this.postElem, function() {
+	return reblog(this.postElem).addCallback(function() {
 		replaceElemText(progress, "Reblogged");
 		progress.classList.add("done");
-		cont();
 	});
 };
 
-GUI.Post.prototype.download = function(dir, cont) {
+GUI.Post.prototype.download = function(dir) {
 	var self = this;
 	var failed = false;
-	asyncEach(this.media, function(m, k) {
-		download(m.url, dir, progress, function (success) {
+	function loop(index) {
+		var m = self.media[index];
+		return download(m.url, dir, progress).addCallback(function (success) {
 			if (success) {
 				replaceElemText(m.progressElem, "complete");
 				m.progressElem.classList.add("done");
@@ -220,42 +243,42 @@ GUI.Post.prototype.download = function(dir, cont) {
 				replaceElemText(m.progressElem, "failed");
 				failed = true;
 			}
-			k();
+			return loop(index + 1);
 		});
 		function progress(cur, max) {
 			replaceElemText(m.progressElem, (cur / max * 100).toFixed(1) + " %");
 		}
-	}, function() {
+	}
+	return loop(0).addCallback(function() {
 		if (!failed) {
 			self.tr.querySelector("td.download").classList.add("done");
 		}
-		cont();
 	});
 };
 
 // documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
 // 自分のtumblelogのdocumentを指定して、
 // 既にリブログ済みのポストに到達するまでーということをやるために
-function readLikedPostsWithTumblelogDocument(doc, cont) {
+function readLikedPostsWithTumblelogDocument(doc) {
 	var posts = doc.querySelectorAll("#posts .post.is_reblog.is_mine");
 	var urls = Array.map(posts, function(post)
 		post.querySelector(".post_info a").getAttribute("href"));
 	var urlsRegexp = new RegExp("^(?:" + Array.map(urls, function(url)
 					url.replace(/\W/g,'\\$&')).join("|") + ")");
-	readLikedPostsWithPredicate(function (allPosts, post)
-		urlsRegexp.test(getPermalinkURL(post)), cont);
+	return readLikedPostsWithPredicate(function (allPosts, post)
+		urlsRegexp.test(getPermalinkURL(post)));
 }
 
-function readLikedPosts(num, cont) {
+function readLikedPosts(num) {
 	var predicate = function(allPosts, post) allPosts.length >= num;
-	readLikedPostsWithPredicate(predicate, cont);
+	return readLikedPostsWithPredicate(predicate);
 }
 
-function readLikedPostsWithPredicate(predicate, cont) {
+function readLikedPostsWithPredicate(predicate) {
 	var allPosts = [];
-	loop(1);
+	return loop(1);
 	function loop(page) {
-		accessPage(ORIGIN + "/likes/page/" + page, {}, function(res) {
+		return doXHR(ORIGIN + "/likes/page/" + page).addCallback(function (res) {
 			var doc = convertToHTMLDocument(res.responseText);
 			var posts = doc.querySelectorAll("#posts .post");
 			
@@ -266,60 +289,47 @@ function readLikedPostsWithPredicate(predicate, cont) {
 				allPosts.push(posts[i]);
 			}
 			if (i < posts.length || !doc.querySelector("#next_page_link")) {
-				cont(allPosts);
+				return Async.succeed(allPosts);
 			} else {
-				loop(page + 1);
+				return loop(i + 1);
 			}
 		});
 	}
 }
 
-function reblogAll(posts, cont) {
-	var index = 0;
-	loop();
-	function loop() {
-		if (index >= posts.length) {
-			cont();
-		}
-		reblog(posts[index++], loop);
+function reblogAll(posts) {
+	return loop(0);
+	function loop(index) {
+		if (index >= posts.length) return Async.succeed();
+		return reblog(posts[index]).addCallback(loop, index + 1);
 	}
 }
 
-function reblog(postElem, cont) {
+function reblog(postElem) {
 	var anchors = postElem.querySelectorAll("a");
 	var reblogAnchor = Array.filter(anchors, function(a)
 			     /^\/reblog\//.test(a.getAttribute("href")))[0];
 	var reblogURL = ORIGIN + reblogAnchor.getAttribute("href");
-	reblogByURL(reblogURL, cont);
+	return reblogByURL(reblogURL);
 }
 
-function reblogByURL(reblogURL, cont) {
+function reblogByURL(reblogURL) {
 	liberator.log("reblogging "+reblogURL);
 	var redirect_to;
-	accessPage(reblogURL, {}, function(res) {
+	return doXHR(reblogURL).addCallback(function(res) {
 		var doc = convertToHTMLDocument(res.responseText);
 		var form = doc.querySelector("form#edit_post");
 		var store = formToKeyValueStore(form);
 		redirect_to = form.redirect_to;
 		delete store.preview_post;
 		var data = toQueryString(store);
-		accessPage(reblogURL, {method: "POST", postBody: data}, onReceivePostResponse);
-	});
-	function onReceivePostResponse(res) {
-		if (res.transport.channel.URI.spec.indexOf(ORIGIN + redirect_to)) {
+		return doXHR(reblogURL, {method: "POST", sendContent: data});
+	}).addCallback(function(res) {
+		if (res.channel.URI.spec.indexOf(ORIGIN + redirect_to)) {
 			liberator.log("reblog success: "+reblogURL);
-			cont();
 		} else {
 			throw new Error("post failed: "+res.transport.channel.URI.spec);
 		}
-	}
-}
-
-function downloadPosts(posts, dir) {
-	posts.forEach(function (post) {
-		detectPhotoURLs(post).forEach(function (url) {
-			download(url, dir);
-		});
 	});
 }
 
@@ -392,34 +402,13 @@ function toQueryString(store) {
 	return query.join("&");
 }
 
-function accessPage(url, opts, cont) {
-	var req = new libly.Request(url, {}, opts);
-	req.addEventListener("onSuccess", cont);
-	req.addEventListener("onFailure", function() {
-		throw new Error("failed to access " + url);
-	});
-	req._request(opts.method || "GET");
-}
-
 function replaceElemText(node, text) {
 	var doc = node.ownerDocument;
 	node.innerHTML = "";
 	node.appendChild(doc.createTextNode(text));
 }
 
-function asyncEach(array, callback, cont) {
-	loop(0);
-	function loop(index) {
-		if (index >= array.length) {
-			cont();
-		} else {
-			callback(array[index], function() loop(index + 1));
-		}
-	}
-}
-
-// saveURL()はディレクトリを指定する機能がないため使えない
-function download(url, dir, progress, cont) {
+function download(url, dir, progress) {
 	var uri = makeURI(url);
 	var fileName = getDefaultFileName(null, uri);
 	var persist = makeWebBrowserPersist();
@@ -438,7 +427,13 @@ function download(url, dir, progress, cont) {
 		onProgressChange: onProgressChange,
 		onStateChange: onStateChange
 	};
+	var deferred = new Deferred();
 	persist.saveURI(uri, null, null, null, null, file);
+	deferred.canceler = function() {
+		// TODO
+		persist.cancelSave();
+	};
+	return deferred;
 
 	function onProgressChange(aWebProgress, aRequest, aCurSelfProgress, aMaxSelfProgress, aCurTotalProgress, aMaxTotalProgress) {
 		download.onProgressChange.apply(this, arguments);
@@ -447,7 +442,7 @@ function download(url, dir, progress, cont) {
 	function onStateChange(aWebProgress, aRequest, aStateFlags, aStatus) {
 		download.onStateChange.apply(this, arguments);
 		if (aStateFlags & Ci.nsIWebProgressListener.STATE_STOP) {
-			if (cont) cont(aStatus === 0);
+			deferred.callback(aStatus === 0);
 		}
 	}
 }
@@ -478,4 +473,6 @@ function convertToHTMLDocument(html, doc) {
 	doc.documentElement.appendChild(range.createContextualFragment(html));
 	
 	return doc
+}
+
 }
