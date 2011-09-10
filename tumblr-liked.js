@@ -26,6 +26,7 @@ var TITLE = __context__.NAME;
 
 var DEFAULT_POSTS_NUM = 5;
 var REBLOG_INTERVAL_SEC = 3;
+var DOWNLOAD_INTERVAL_SEC = 0;
 
 commands.add(
 	["tumblrliked"],
@@ -170,19 +171,25 @@ GUI.prototype._run_changeGUIState = function(canceler) {
 };
 
 GUI.prototype.runReblog = function() {
+	return this.doAsyncProcessEachPostsWithWait(function(post) post.reblog(),
+	                                            REBLOG_INTERVAL_SEC);
+};
+
+GUI.prototype.runDownload = function(dir) {
+	return this.doAsyncProcessEachPostsWithWait(function(post) post.download(dir),
+	                                            DOWNLOAD_INTERVAL_SEC);
+};
+
+GUI.prototype.doAsyncProcessEachPostsWithWait = function(process, sec) {
 	var first = true;
 	return this.doAsyncProcessEachPosts(function(post) {
 		if (first) {
 			first = false;
-			return post.reblog();
+			return process(post);
 		} else {
-			return Async.callLater(REBLOG_INTERVAL_SEC, post.reblog.bind(post));
+			return Async.callLater(sec, process, post);
 		}
 	});
-};
-
-GUI.prototype.runDownload = function(dir) {
-	return this.doAsyncProcessEachPosts(function(post) post.download(dir));
 };
 
 GUI.prototype.doAsyncProcessEachPosts = function(process) {
