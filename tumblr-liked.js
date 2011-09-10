@@ -77,6 +77,7 @@ if (__context__.DEBUG) {
 
 var GUI = function (funcToReadPost) {
 	this.funcToReadPost = funcToReadPost || readLikedPosts.bind(null, DEFAULT_POSTS_NUM);
+	this.browser = null;
 	this.doc = null;
 	this.posts = null;
 };
@@ -86,8 +87,8 @@ GUI.start = function(funcToReadPost) {
 };
 
 GUI.prototype.start = function() {
-	var tab = gBrowser.getBrowserForTab(gBrowser.addTab(""));
-	tab.addEventListener("load", this._start_onTabLoad.bind(this), true);
+	this.browser = gBrowser.getBrowserForTab(gBrowser.addTab(""));
+	this.browser.addEventListener("load", this._start_onTabLoad.bind(this), true);
 };
 
 GUI.prototype._start_onTabLoad = function(event) {
@@ -148,39 +149,41 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 };
 
 GUI.prototype.run = function() {
-	var self = this;
 	var dir = this.doc.querySelector("#directory").value;
 	var deferredList = new DeferredList([this.runReblog(), this.runDownload(dir)],
 	                                    false, true, false,
 		                            function(d) d.list.forEach(function(e) e.cancel()));
-	var disposer = this._run_changeGUIState(function() {
-		deferredList.cancel();
-		self.changeStatus("canceled");
-	});
-
-	this.changeStatus("runnning ...");
-	deferredList.addCallback(function() {
-		disposer();
-		self.changeStatus("finish!");
-	});
+	this._run_changeGUIState(deferredList);
 };
 
-GUI.prototype._run_changeGUIState = function(canceler) {
+GUI.prototype._run_changeGUIState = function(deferred) {
+	var self = this;
 	var runButton = this.doc.querySelector("button#run");
 	var cancelButton = this.doc.querySelector("button#cancel");
 	runButton.disabled = true;
 	cancelButton.disabled = false;
 
 	var onClickCancelButton = function() {
-		canceler();
+		deferred.cancel();
+		self.changeStatus("canceled");
 		dispose();
 	};
+	var onUnload = function() {
+		deferred.cancel();
+	};
 	cancelButton.addEventListener("click", onClickCancelButton, false);
-	return dispose;
+	this.browser.contentWindow.addEventListener("unload", onUnload, false);
+
+	this.changeStatus("runnning ...");
+	deferred.addCallback(function() {
+		dispose();
+		self.changeStatus("finish!");
+	});
 
 	function dispose() {
 		cancelButton.removeEventListener("click", onClickCancelButton);
 		cancelButton.disabled = true;
+		self.browser.contentWindow.removeEventListener("unload", onUnload);
 	}
 };
 
