@@ -103,6 +103,7 @@ GUI.prototype._start_onTabLoad = function(event) {
 		  td.download .progress { display: inline-block; width: 100px; }
 		  .done { background-color: #CDF4BE; }
 		  button { font-size: 50px; }
+		  button#run { padding-left: 30px; padding-right: 30px; }
 		  p#status { min-height: 1em; }
 		  /*]]>*/
 		</style>
