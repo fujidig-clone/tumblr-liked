@@ -57,12 +57,11 @@ if (__context__.DEBUG) {
 			}
 
 			var d = Async.doXHR(url, opts);
-			d.callback = function(res) {
+			return d.addCallback(function(res) {
 				CACHE[url] = res;
 				liberator.log("CACHE STORE: "+url);
-				return Deferred.prototype.callback.apply(this, arguments);
-			};
-			return d;
+				return res;
+			});
 		};
 		// リブログは実際に行わない
 		reblogByURL = function(reblogURL) {
