@@ -104,7 +104,8 @@ GUI.prototype._start_onTabLoad = function(event) {
 		</style>
 		<h1>{TITLE}</h1>
 		Directory to save: <input type="text" size="40" id="directory"/><br/>
-		<button disabled="disabled">Run!</button>
+		<button disabled="disabled" id="run">Run!</button>
+		<button disabled="disabled" id="cancel">Cancel</button>
 		<table>
 		<thead><tr><th/><th>Reblog</th><th>Download</th></tr></thead>
 		<tbody/>
@@ -129,19 +130,43 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 		tbody.appendChild(post.tr);
 		posts.push(post);
 	});
-	var button = this.doc.querySelector("button");
+	var button = this.doc.querySelector("button#run");
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
 };
 
 GUI.prototype.run = function() {
 	var dir = this.doc.querySelector("#directory").value;
-	var deferredList = new DeferredList([this.runReblog, this.runDownload(dir)],
+	var deferredList = new DeferredList([this.runReblog(), this.runDownload(dir)],
 	                                    false, true, false,
 		                            function(d) d.list.forEach(function(e) e.cancel()));
-	deferredList.addCallback(function() {
-		alert("finish");
+	var disposer = this._run_changeGUIState(function() {
+		deferredList.cancel();
 	});
+
+	deferredList.addCallback(function() {
+		disposer();
+		alert("finish!");
+	});
+};
+
+GUI.prototype._run_changeGUIState = function(canceler) {
+	var runButton = this.doc.querySelector("button#run");
+	var cancelButton = this.doc.querySelector("button#cancel");
+	runButton.disabled = true;
+	cancelButton.disabled = false;
+
+	var onClickCancelButton = function() {
+		canceler();
+		dispose();
+	};
+	cancelButton.addEventListener("click", onClickCancelButton, false);
+	return dispose;
+
+	function dispose() {
+		cancelButton.removeEventListener("click", onClickCancelButton);
+		cancelButton.disabled = true;
+	}
 };
 
 GUI.prototype.runReblog = function() {
@@ -151,7 +176,7 @@ GUI.prototype.runReblog = function() {
 			first = false;
 			return post.reblog();
 		} else {
-			return Async.callLater(REBLOG_INTERVAL_SEC * 1000, post.reblog.bind(post));
+			return Async.callLater(REBLOG_INTERVAL_SEC, post.reblog.bind(post));
 		}
 	});
 };
@@ -164,9 +189,7 @@ GUI.prototype.doAsyncProcessEachPosts = function(process) {
 	var posts = this.posts;
 	return loop(0);
 	function loop(index) {
-		if (index >= posts.length) {
-			return;
-		}
+		if (index >= posts.length) return Async.succeed();
 		var post = posts[index];
 		return process(post).addCallback(loop, index + 1);
 	}
@@ -234,6 +257,7 @@ GUI.Post.prototype.download = function(dir) {
 	var self = this;
 	var failed = false;
 	function loop(index) {
+		if (index >= self.media.length) return Async.succeed();
 		var m = self.media[index];
 		return download(m.url, dir, progress).addCallback(function (success) {
 			if (success) {
