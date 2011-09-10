@@ -102,13 +102,15 @@ GUI.prototype._start_onTabLoad = function(event) {
 		  td.download { text-align: right; }
 		  td.download .progress { display: inline-block; width: 100px; }
 		  .done { background-color: #CDF4BE; }
-		  button { font-size: 50px };
+		  button { font-size: 50px; }
+		  p#status { min-height: 1em; }
 		  /*]]>*/
 		</style>
 		<h1>{TITLE}</h1>
 		Directory to save: <input type="text" size="40" id="directory"/><br/>
 		<button disabled="disabled" id="run">Run!</button>
 		<button disabled="disabled" id="cancel">Cancel</button>
+		<p id="status"></p>
 		<table>
 		<thead><tr><th/><th>Reblog</th><th>Download</th></tr></thead>
 		<tbody/>
@@ -116,12 +118,17 @@ GUI.prototype._start_onTabLoad = function(event) {
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
 	this.doc.querySelector("#directory").value = this.getDefaultDirectory();
+	this.changeStatus("collecting posts ...");
 	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this));
 };
 
 GUI.prototype.getDefaultDirectory = function() {
 	return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
-}
+};
+
+GUI.prototype.changeStatus = function(text) {
+	replaceElemText(this.doc.querySelector("#status"), text);
+};
 
 GUI.prototype._start_onReceivePosts = function(postElems) {
 	postElems = postElems.reverse(); // 古い順に
@@ -136,20 +143,24 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 	var button = this.doc.querySelector("button#run");
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
+	this.changeStatus("");
 };
 
 GUI.prototype.run = function() {
+	var self = this;
 	var dir = this.doc.querySelector("#directory").value;
 	var deferredList = new DeferredList([this.runReblog(), this.runDownload(dir)],
 	                                    false, true, false,
 		                            function(d) d.list.forEach(function(e) e.cancel()));
 	var disposer = this._run_changeGUIState(function() {
 		deferredList.cancel();
+		self.changeStatus("canceled");
 	});
 
+	this.changeStatus("runnning ...");
 	deferredList.addCallback(function() {
 		disposer();
-		alert("finish!");
+		self.changeStatus("finish!");
 	});
 };
 
