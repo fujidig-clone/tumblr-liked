@@ -69,6 +69,9 @@ if (__context__.DEBUG) {
 			liberator.log("[DUMMY] reblogging "+reblogURL);
 			return Async.wait(0);
 		};
+		REBLOG_INTERVAL_SEC = 0.5;
+		DOWNLOAD_INTERVAL_SEC = 2;
+		detectMediaURLs = detectThumbnailURLs;
 		GUI.start();
 	});
 }
