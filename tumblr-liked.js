@@ -467,16 +467,20 @@ function download(url, dir, progress) {
 	var fileuri = makeFileURI(file);
 
 	var downloadManager = Cc["@mozilla.org/download-manager;1"].getService(Ci.nsIDownloadManager);
-	var download = downloadManager.addDownload(0, uri, fileuri, null, null, null, null, null, persist);
+	var download = downloadManager.addDownload(0, uri, fileuri, null, null, null, null, persist);
 	persist.progressListener = {
 		onProgressChange: onProgressChange,
 		onStateChange: onStateChange
 	};
 	var deferred = new Deferred();
 	persist.saveURI(uri, null, null, null, null, file);
-	deferred.canceler = function() {
-		// TODO
-		persist.cancelSave();
+	deferred.canceller = function() {
+		// onStateChangeのdeferred.callbackが呼ばれるのを防ぐ
+		persist.progressListener = null;
+
+		if (download.state === downloadManager.DOWNLOAD_DOWNLOADING) {
+			downloadManager.cancelDownload(download.id);
+		}
 	};
 	return deferred;
 
