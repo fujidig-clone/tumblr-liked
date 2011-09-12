@@ -20,6 +20,7 @@ var Async = window.MochiKit.Async;
 var Deferred = Async.Deferred;
 var DeferredList = Async.DeferredList;
 var doXHR = Async.doXHR;
+var SimularImageFinder = plugins.libpuzzle.SimularImageFinder;
 
 var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
@@ -27,6 +28,8 @@ var TITLE = __context__.NAME;
 var DEFAULT_POSTS_NUM = 5;
 var REBLOG_INTERVAL_SEC = 3;
 var DOWNLOAD_INTERVAL_SEC = 0;
+var READPOST_INTERVAL_SEC = 1;
+var SIMILALY_THRESHOLD = 0.2;
 
 commands.add(
 	["tumblrliked"],
@@ -71,7 +74,8 @@ if (__context__.DEBUG) {
 		REBLOG_INTERVAL_SEC = 0.5;
 		DOWNLOAD_INTERVAL_SEC = 2;
 		detectMediaURLs = detectThumbnailURLs;
-		GUI.start();
+		//GUI.start();
+		startDuplicateCheck();
 	});
 }
 
@@ -304,6 +308,108 @@ GUI.Post.prototype.download = function(dir) {
 	});
 };
 
+function startDuplicateCheck() {
+	collectImagesAndBuildFinder(getOpenedTumblelogName())
+	.addCallback(function ([finder, posts]) {
+		return newTab()
+			.addCallback(function (browser) [browser, finder, posts]);
+	}).addCallback(function ([browser, finder, posts]) {
+		var doc = browser.contentDocument;
+		var html = <html>
+			<p>from {posts.length} posts</p>
+			<table><tbody/></table>
+		</html>;
+		var tbody = html.table.tbody;
+		var results = finder.findAll(SIMILALY_THRESHOLD);
+		results.forEach(function ([image1, image2, dist]) {
+			var tr = <tr/>;
+			tbody.appendChild(tr);
+			tr.appendChild(<td>{dist.toFixed(3)}</td>);
+			[image1, image2].forEach(function (image) {
+				var post = image.meta.post;
+				var a = <a href={post.url}/>;
+				var date = new Date(post["date"]);
+				var dateStr = libly.$U.dateFormat(date);
+				a.appendChild(<>{dateStr}<br/></>);
+				post.getThumbnailURLs().forEach(function (imageUrl) {
+					a.appendChild(<img src={imageUrl}/>);
+				});
+				tr.appendChild(<td>{a}</td>);
+			});
+		});
+		if (results.length === 0) {
+			html.appendChild(<p>duplicate posts not found!</p>);
+		}
+		doc.documentElement.appendChild(util.xmlToDom(html.children(), doc));
+		finder.close();
+	}).addErrback(liberator.echoerr);
+}
+
+function getOpenedTumblelogName() {
+	var url = content.location.href;
+	if (url.indexOf(ORIGIN + "/tumblelog/") === 0) {
+		return url.match(/\/tumblelog\/([\w-]+)/)[1];
+	} else {
+		throw "open tumblelog page";
+	}
+}
+
+function collectImagesAndBuildFinder(blogName) {
+	var finder = new SimularImageFinder();
+	var num = 0;
+	return readBlogPosts(blogName).addCallback(function (posts) {
+		var images = [];
+		Array.forEach(posts, function (post) {
+			num ++;
+			post.getThumbnailURLs().forEach(function (imageUrl) {
+				images.push([post, imageUrl]);
+			});
+		});
+		var list = images.map(function ([post, imageUrl]) {
+			liberator.log(imageUrl);
+			return loadImage(imageUrl)
+				.addCallback(function (binary) {
+					var meta = {imageUrl: imageUrl, post: post};
+					finder.add(meta, binary);
+				});
+		});
+		return new DeferredList(list, false, true, false).addCallback(function() {
+			return [finder, posts];
+		});
+	});
+}
+
+function PostDataFromAPI(data) {
+	libly.$U.extend(this, data);
+}
+
+PostDataFromAPI.prototype.getThumbnailURLs = function() {
+	if (this.type !== "photo") return [];
+	var photos = this.photos.length > 0 ? this.photos : [this];
+	return photos.map(function(photo) photo["photo-url-100"]);
+};
+
+function readBlogPosts(name) {
+	var posts = [];
+	function loop() {
+		var url = "http://"+name+".tumblr.com/api/read/json?start="+posts.length+"&num=50";
+		liberator.log(url);
+		return doXHR(url).addCallback(function (res) {
+			var json = res.responseText.replace(/^var tumblr_api_read = |;\s*$/g, "");
+			var data = JSON.parse(json);
+			data.posts.forEach(function (post) {
+				posts.push(new PostDataFromAPI(post));
+			});
+			if (posts.length < Number(data["posts-total"])) {
+				return Async.callLater(READPOST_INTERVAL_SEC, loop);
+			} else {
+				return Async.succeed(posts);
+			}
+		});
+	}
+	return loop();
+}
+
 // documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
 // 自分のtumblelogのdocumentを指定して、
 // 既にリブログ済みのポストに到達するまでーということをやるために
@@ -429,8 +535,9 @@ function getPermalinkURL(postElem) {
 }
 
 function getPostType(postElem) {
-	var typesRegexp = /\b(text|quote|link|answer|video|audio|photo)\b/;
-	return postElem.className.match(typesRegexp)[0];
+	var typesRegexp = /\b(text|quote|link|answer|video|audio|photo|regular)\b/;
+	var matched = postElem.className.match(typesRegexp);
+	return matched && matched[0];
 }
 
 function formToKeyValueStore(form) {
@@ -454,6 +561,29 @@ function replaceElemText(node, text) {
 	var doc = node.ownerDocument;
 	node.innerHTML = "";
 	node.appendChild(doc.createTextNode(text));
+}
+
+function toAbsoluteURL(url, base) {
+	return makeURI(url, null, makeURI(base)).spec;
+}
+
+function newTab() {
+	var browser = gBrowser.getBrowserForTab(gBrowser.addTab(""));
+	var deferred = new Deferred();
+	browser.addEventListener("load", callback, true);
+	return deferred;
+
+	function callback() {
+		deferred.callback(browser);
+	}
+}
+
+function loadImage(url) {
+	var req = new XMLHttpRequest();
+	req.open("GET", url, true);
+	req.responseType = "arraybuffer";
+	return Async.sendXMLHttpRequest(req, null).addCallback(function()
+		new Uint8Array(req.response));
 }
 
 function download(url, dir, progress) {
