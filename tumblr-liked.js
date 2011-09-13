@@ -339,7 +339,7 @@ function readLikedPostsWithPredicate(predicate) {
 			if (i < posts.length || !doc.querySelector("#next_page_link")) {
 				return Async.succeed(allPosts);
 			} else {
-				return loop(i + 1);
+				return loop(page + 1);
 			}
 		});
 	}
