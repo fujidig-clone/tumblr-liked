@@ -417,10 +417,25 @@ function readLikedPostsWithTumblelogDocument(doc) {
 	var posts = doc.querySelectorAll("#posts .post.is_reblog.is_mine");
 	var urls = Array.map(posts, function(post)
 		post.querySelector(".post_info a").getAttribute("href"));
-	var urlsRegexp = new RegExp("^(?:" + Array.map(urls, function(url)
-					url.replace(/\W/g,'\\$&')).join("|") + ")");
+	var urlsRegexp = genRegexp(urls);
 	return readLikedPostsWithPredicate(function (allPosts, post)
 		urlsRegexp.test(getPermalinkURL(post)));
+}
+
+function genRegexp(strings) {
+	return new RegExp("^(?:" + Array.map(strings, function(str)
+					str.replace(/\W/g,'\\$&')).join("|") + ")");
+}
+
+function readLikedPostsNotReblogged(blogName) {
+	return readBlogPosts(blogName).addCallback(function (posts) {
+		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
+		var terminatePredicate = function(allPosts, post) false;
+		var rejectPredicate = function(allPosts, post) {
+			return keysRegexp.test(getPostReblogKey(post));
+		}
+		return readLikedPostsWithPredicate(terminatePredicate, rejectPredicate);
+	});
 }
 
 function readLikedPosts(num) {
@@ -428,7 +443,8 @@ function readLikedPosts(num) {
 	return readLikedPostsWithPredicate(predicate);
 }
 
-function readLikedPostsWithPredicate(predicate) {
+function readLikedPostsWithPredicate(terminatePredicate, rejectPredicate) {
+	rejectPredicate = rejectPredicate || function(allPosts, post) false;
 	var allPosts = [];
 	return loop(1);
 	function loop(page) {
@@ -437,10 +453,11 @@ function readLikedPostsWithPredicate(predicate) {
 			var posts = doc.querySelectorAll("#posts .post");
 			
 			for (var i = 0; i < posts.length; i ++) {
-				if (predicate(allPosts, posts[i])) {
+				if (terminatePredicate(allPosts, posts[i])) {
 					break;
+				} else if (!rejectPredicate(allPosts, posts[i])) {
+					allPosts.push(posts[i]);
 				}
-				allPosts.push(posts[i]);
 			}
 			if (i < posts.length || !doc.querySelector("#next_page_link")) {
 				return Async.succeed(allPosts);
@@ -538,6 +555,11 @@ function getPostType(postElem) {
 	var typesRegexp = /\b(text|quote|link|answer|video|audio|photo|regular)\b/;
 	var matched = postElem.className.match(typesRegexp);
 	return matched && matched[0];
+}
+
+function getPostReblogKey(postElem) {
+	var href = postElem.querySelector("a[href^='/reblog/']").getAttribute("href");
+	return href.match(/\/reblog\/\d+\/(\w+)/)[1];
 }
 
 function formToKeyValueStore(form) {
