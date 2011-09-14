@@ -25,11 +25,20 @@ var SimularImageFinder = plugins.libpuzzle.SimularImageFinder;
 var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
 
-var DEFAULT_POSTS_NUM = 5;
 var REBLOG_INTERVAL_SEC = 3;
 var DOWNLOAD_INTERVAL_SEC = 0;
 var READPOST_INTERVAL_SEC = 1;
 var SIMILALY_THRESHOLD = 0.2;
+
+function getConfiguredBlogName() {
+	var result = liberator.globalVariables.tumblrliked_blogname;
+	if (!result) throw "g:tumblrliked_blogname is not set";
+	return result;
+}
+
+function getConfiguredDir() {
+	return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
+}
 
 commands.add(
 	["tumblrliked"],
@@ -37,13 +46,7 @@ commands.add(
 	function (args) {
 		var arg = args[0];
 		var num = arg && /^\d+$/.test(arg) ? Number(arg) : null;
-		var funcToReadPost;
-		if (num !== null) {
-			funcToReadPost = readLikedPosts.bind(null, num);
-		} else if (content.location.href.indexOf(ORIGIN+"/tumblelog/") === 0) {
-			funcToReadPost = readLikedPostsWithTumblelogDocument.bind(null, content.document);
-		}
-		GUI.start(funcToReadPost);
+		commandTumblrLiked(num);
 	},
 	{argCount: "?"}, true);
 
@@ -74,13 +77,22 @@ if (__context__.DEBUG) {
 		REBLOG_INTERVAL_SEC = 0.5;
 		DOWNLOAD_INTERVAL_SEC = 2;
 		detectMediaURLs = detectThumbnailURLs;
-		GUI.start();
-		//startDuplicateCheck();
+		commandTumblrLiked();
 	});
 }
 
+function commandTumblrLiked(num) {
+	var funcToReadPost;
+	if (typeof num == "number") {
+		funcToReadPost = readLikedPosts.bind(null, num);
+	} else {
+		funcToReadPost = readLikedPostsUntilEncounterReblogged;
+	}
+	GUI.start(funcToReadPost);
+}
+
 var GUI = function (funcToReadPost) {
-	this.funcToReadPost = funcToReadPost || readLikedPosts.bind(null, DEFAULT_POSTS_NUM);
+	this.funcToReadPost = funcToReadPost;
 	this.browser = null;
 	this.doc = null;
 	this.posts = null;
@@ -123,13 +135,9 @@ GUI.prototype._start_onTabLoad = function(event) {
 		</table>
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
-	this.doc.querySelector("#directory").value = this.getDefaultDirectory();
+	this.doc.querySelector("#directory").value = getConfiguredDir();
 	this.changeStatus("collecting posts ...");
 	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this)).addErrback(liberator.echoerr);
-};
-
-GUI.prototype.getDefaultDirectory = function() {
-	return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
 };
 
 GUI.prototype.changeStatus = function(text) {
@@ -339,7 +347,7 @@ DuplicateChecker.prototype.start = function() {
 };
 
 function startDuplicateCheck() {
-	collectImagesAndBuildFinder(getOpenedTumblelogName())
+	collectImagesAndBuildFinder(getConfiguredBlogName())
 	.addCallback(function ([finder, posts]) {
 		return newTab()
 			.addCallback(function (browser) [browser, finder, posts]);
@@ -373,15 +381,6 @@ function startDuplicateCheck() {
 		doc.documentElement.appendChild(util.xmlToDom(html.children(), doc));
 		finder.close();
 	}).addErrback(liberator.echoerr);
-}
-
-function getOpenedTumblelogName() {
-	var url = content.location.href;
-	if (url.indexOf(ORIGIN + "/tumblelog/") === 0) {
-		return url.match(/\/tumblelog\/([\w-]+)/)[1];
-	} else {
-		throw "open tumblelog page";
-	}
 }
 
 function collectImagesAndBuildFinder(blogName) {
@@ -419,18 +418,22 @@ PostDataFromAPI.prototype.getThumbnailURLs = function() {
 	return photos.map(function(photo) photo["photo-url-100"]);
 };
 
-function readBlogPosts(name) {
+function readBlogPosts(name, num) {
+	if (num == undefined) num = Infinity;
 	var posts = [];
 	function loop() {
-		var url = "http://"+name+".tumblr.com/api/read/json?start="+posts.length+"&num=50";
+		var n = Math.min(num - posts.length, 50);
+		var url = "http://"+name+".tumblr.com/api/read/json?start="+posts.length+"&num="+n;
 		liberator.log(url);
 		return doXHR(url).addCallback(function (res) {
 			var json = res.responseText.replace(/^var tumblr_api_read = |;\s*$/g, "");
 			var data = JSON.parse(json);
 			data.posts.forEach(function (post) {
-				posts.push(new PostDataFromAPI(post));
+				if (posts.length < num) {
+					posts.push(new PostDataFromAPI(post));
+				}
 			});
-			if (posts.length < Number(data["posts-total"])) {
+			if (posts.length < Math.min(Number(data["posts-total"]), num)) {
 				return Async.callLater(READPOST_INTERVAL_SEC, loop);
 			} else {
 				return Async.succeed(posts);
@@ -440,25 +443,20 @@ function readBlogPosts(name) {
 	return loop();
 }
 
-// documentに含まれる自分のリブログポストの元ポストが出現するまでのポストを集める
-// 自分のtumblelogのdocumentを指定して、
-// 既にリブログ済みのポストに到達するまでーということをやるために
-function readLikedPostsWithTumblelogDocument(doc) {
-	var posts = doc.querySelectorAll("#posts .post.is_reblog.is_mine");
-	var urls = Array.map(posts, function(post)
-		post.querySelector(".post_info a").getAttribute("href"));
-	var urlsRegexp = genRegexp(urls);
-	return readLikedPostsWithPredicate(function (allPosts, post)
-		urlsRegexp.test(getPermalinkURL(post)));
+// ブログの最新50件に含まれるリブログにぶちあたるまでのpostを集める
+function readLikedPostsUntilEncounterReblogged() {
+	return readBlogPosts(getConfiguredBlogName(), 50).addCallback(function (posts) {
+		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
+		var terminatePredicate = function(allPosts, post) {
+			return keysRegexp.test(getPostReblogKey(post));
+		}
+		return readLikedPostsWithPredicate(terminatePredicate);
+	});
 }
 
-function genRegexp(strings) {
-	return new RegExp("^(?:" + Array.map(strings, function(str)
-					str.replace(/\W/g,'\\$&')).join("|") + ")");
-}
-
-function readLikedPostsNotReblogged(blogName) {
-	return readBlogPosts(blogName).addCallback(function (posts) {
+// こっちはブログとlikedを最後のページまでアクセスして正確に未リブログだけを集める
+function readLikedPostsNotReblogged() {
+	return readBlogPosts(getConfiguredBlogName()).addCallback(function (posts) {
 		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
 		var terminatePredicate = function(allPosts, post) false;
 		var rejectPredicate = function(allPosts, post) {
@@ -613,6 +611,11 @@ function replaceElemText(node, text) {
 	var doc = node.ownerDocument;
 	node.innerHTML = "";
 	node.appendChild(doc.createTextNode(text));
+}
+
+function genRegexp(strings) {
+	return new RegExp("^(?:" + Array.map(strings, function(str)
+					str.replace(/\W/g,'\\$&')).join("|") + ")$");
 }
 
 function toAbsoluteURL(url, base) {
