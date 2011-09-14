@@ -74,8 +74,8 @@ if (__context__.DEBUG) {
 		REBLOG_INTERVAL_SEC = 0.5;
 		DOWNLOAD_INTERVAL_SEC = 2;
 		detectMediaURLs = detectThumbnailURLs;
-		//GUI.start();
-		startDuplicateCheck();
+		GUI.start();
+		//startDuplicateCheck();
 	});
 }
 
@@ -125,7 +125,7 @@ GUI.prototype._start_onTabLoad = function(event) {
 	this.doc.documentElement.appendChild(this.toDOM(html));
 	this.doc.querySelector("#directory").value = this.getDefaultDirectory();
 	this.changeStatus("collecting posts ...");
-	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this));
+	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this)).addErrback(liberator.echoerr);
 };
 
 GUI.prototype.getDefaultDirectory = function() {
@@ -150,6 +150,7 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
 	this.changeStatus("");
+	DuplicateChecker.start(this);
 };
 
 GUI.prototype.run = function() {
@@ -306,6 +307,35 @@ GUI.Post.prototype.download = function(dir) {
 			self.tr.querySelector("td.download").classList.add("done");
 		}
 	});
+};
+
+function DuplicateChecker(gui) {
+	this.gui = gui;
+	this.outputElem = null;
+}
+
+DuplicateChecker.start = function(gui) {
+	new DuplicateChecker(gui).start();
+};
+
+DuplicateChecker.prototype.start = function() {
+	var xml = <div id="duplicate-checker">
+		<h2>Duplicate Checker</h2>
+	</div>;
+	var style = <style type="text/css">
+		/*<![CDATA[*/
+		#duplicate-checker {
+			border: 1px solid black;
+			margin: 5px;
+			padding: 5px;
+		}
+		/*]]>*/
+	</style>
+	var doc = this.gui.doc;
+	var h1 = doc.querySelector("h1");
+	this.outputElem = util.xmlToDom(xml, doc);
+	h1.parentNode.insertBefore(this.outputElem, h1.nextSibling);
+	doc.documentElement.appendChild(util.xmlToDom(style, doc));
 };
 
 function startDuplicateCheck() {
