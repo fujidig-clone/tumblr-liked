@@ -76,6 +76,7 @@ if (__context__.DEBUG) {
 		};
 		REBLOG_INTERVAL_SEC = 0.5;
 		DOWNLOAD_INTERVAL_SEC = 2;
+		READPOST_INTERVAL_SEC = 0;
 		detectMediaURLs = detectThumbnailURLs;
 		commandTumblrLiked();
 	});
@@ -329,6 +330,8 @@ DuplicateChecker.start = function(gui) {
 DuplicateChecker.prototype.start = function() {
 	var xml = <div id="duplicate-checker">
 		<h2>Duplicate Checker</h2>
+		<p class="status"/>
+		<div class="result"/>
 	</div>;
 	var style = <style type="text/css">
 		/*<![CDATA[*/
@@ -344,7 +347,91 @@ DuplicateChecker.prototype.start = function() {
 	this.outputElem = util.xmlToDom(xml, doc);
 	h1.parentNode.insertBefore(this.outputElem, h1.nextSibling);
 	doc.documentElement.appendChild(util.xmlToDom(style, doc));
+	this.changeStatus("collectings images...");
+	this.collectImages().addCallback(this.checkDuplicate.bind(this)).addErrback(liberator.echoerr);
 };
+
+DuplicateChecker.prototype.collectImages = function() {
+	var self = this;
+	return this.collectBlogImagesAndBuildFinder().addCallback(function ([finder, blogPosts]) {
+		return self.loadLikedImages().addCallback(function (likedImages) {
+			return [finder, blogPosts, likedImages];
+		});
+	});
+}
+
+DuplicateChecker.prototype.loadLikedImages = function() {
+	var list = [];
+	var result = [];
+	this.gui.posts.forEach(function (post, i) {
+		result[i] = [];
+		detectThumbnailURLs(post.postElem).forEach(function (url, j) {
+			list.push(loadImage(url).addCallback(function (binary) {
+				result[i][j] = binary;
+			}));
+		})
+	});
+	return doParallel(list).addCallback(function () result);
+};
+
+DuplicateChecker.prototype.checkDuplicate = function([finder, blogPosts, likedImages]) {
+	this.changeStatus("checking duplicate");
+	var result = this.findDuplicate(finder, this.gui.posts, likedImages);
+	var output = <div/>;
+	result.forEach(function(res) {
+		detectThumbnailURLs(res.likedPost.postElem).forEach(function(url) {
+			output.appendChild(<img src={url}/>);
+		});
+		res.blogPost.getThumbnailURLs().forEach(function(url) {
+			output.appendChild(<img src={url}/>);
+		});
+		output.appendChild(<br/>);
+	});
+	replaceElemChild(this.outputElem.querySelector("div.result"), this.gui.toDOM(output.children()));
+	finder.close();
+};
+
+DuplicateChecker.prototype.findDuplicate = function(finder, likedPosts, likedImages) {
+	var likedPosts = this.gui.posts;
+	var result = [];
+	likedPosts.forEach(function (likedPost, index) {
+		likedImages[index].forEach(function (image) {
+			finder.findByBinary(image, SIMILALY_THRESHOLD).forEach(function (res) {
+				result.push({dist: res.dist,
+				             likedPost: likedPost,
+				             blogPost: res.image.meta.post});
+			});
+		});
+	});
+	return result;
+};
+
+DuplicateChecker.prototype.changeStatus = function(text) {
+	replaceElemText(this.outputElem.querySelector("p.status"), text);
+};
+
+DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
+	var finder = new SimularImageFinder();
+	return readBlogPosts(getConfiguredBlogName()).addCallback(function (posts) {
+		var images = [];
+		Array.forEach(posts, function (post) {
+			post.getThumbnailURLs().forEach(function (imageUrl) {
+				images.push([post, imageUrl]);
+			});
+		});
+		var list = images.map(function ([post, imageUrl]) {
+			liberator.log(imageUrl);
+			return loadImage(imageUrl)
+				.addCallback(function (binary) {
+					var meta = {imageUrl: imageUrl, post: post};
+					finder.add(meta, binary);
+				});
+		});
+		return new DeferredList(list, false, true, false).addCallback(function() {
+			return [finder, posts];
+		});
+	});
+}
 
 function startDuplicateCheck() {
 	collectImagesAndBuildFinder(getConfiguredBlogName())
@@ -381,31 +468,6 @@ function startDuplicateCheck() {
 		doc.documentElement.appendChild(util.xmlToDom(html.children(), doc));
 		finder.close();
 	}).addErrback(liberator.echoerr);
-}
-
-function collectImagesAndBuildFinder(blogName) {
-	var finder = new SimularImageFinder();
-	var num = 0;
-	return readBlogPosts(blogName).addCallback(function (posts) {
-		var images = [];
-		Array.forEach(posts, function (post) {
-			num ++;
-			post.getThumbnailURLs().forEach(function (imageUrl) {
-				images.push([post, imageUrl]);
-			});
-		});
-		var list = images.map(function ([post, imageUrl]) {
-			liberator.log(imageUrl);
-			return loadImage(imageUrl)
-				.addCallback(function (binary) {
-					var meta = {imageUrl: imageUrl, post: post};
-					finder.add(meta, binary);
-				});
-		});
-		return new DeferredList(list, false, true, false).addCallback(function() {
-			return [finder, posts];
-		});
-	});
 }
 
 function PostDataFromAPI(data) {
@@ -493,14 +555,6 @@ function readLikedPostsWithPredicate(terminatePredicate, rejectPredicate) {
 				return loop(page + 1);
 			}
 		});
-	}
-}
-
-function reblogAll(posts) {
-	return loop(0);
-	function loop(index) {
-		if (index >= posts.length) return Async.succeed();
-		return reblog(posts[index]).addCallback(loop, index + 1);
 	}
 }
 
@@ -613,6 +667,11 @@ function replaceElemText(node, text) {
 	node.appendChild(doc.createTextNode(text));
 }
 
+function replaceElemChild(node, child) {
+	node.innerHTML = "";
+	node.appendChild(child);
+}
+
 function genRegexp(strings) {
 	return new RegExp("^(?:" + Array.map(strings, function(str)
 					str.replace(/\W/g,'\\$&')).join("|") + ")$");
@@ -620,6 +679,11 @@ function genRegexp(strings) {
 
 function toAbsoluteURL(url, base) {
 	return makeURI(url, null, makeURI(base)).spec;
+}
+
+function doParallel(list) {
+	var canceler = function(d) d.list.forEach(function(e) e.cancel());
+	return new DeferredList(list, false, true, false, canceler);
 }
 
 function newTab() {
