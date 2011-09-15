@@ -1,4 +1,4 @@
-var path = File("~/.vimperator/plugin/tumblr-liked.js").path;
+var path = File.joinPaths(File(__context__.PATH).parent.path, "main.js").path;
 io.source(path);
 window.t = plugins.contexts[path];
 
@@ -31,3 +31,5 @@ with(t) {
 	detectMediaURLs = detectThumbnailURLs;
 	commandTumblrLiked();
 }
+
+

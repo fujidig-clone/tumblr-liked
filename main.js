@@ -1,34 +1,32 @@
-
-wholeBlock: {
-
-if (!plugins.libly) {
-	liberator.echoerr(__context__.NAME + ": Please install _libly.js.");
-	break wholeBlock;
-}
-
-if (!window.MochiKit) {
-	commandline.echo(<>{__context__.NAME}:<br/>
-	                  Please download MochiKit.js,<br/>
-	                  and save as _MochiKit.js into the plugin directory<br/>
-	                  <a href="http://mochi.github.com/mochikit/">http://mochi.github.com/mochikit/</a></>,
-	                commandline.HL_ERRORMSG, commandline.APPEND_TO_MESSAGES);
-	break wholeBlock;
-}
-
 var libly = plugins.libly;
-var Async = window.MochiKit.Async;
+var MochiKit = load(["MochiKit/Base.js", "MochiKit/Async.js"]).MochiKit;
+var SimilarImageFinder = load("libpuzzle.js").SimilarImageFinder;
+
+var Async = MochiKit.Async;
 var Deferred = Async.Deferred;
 var DeferredList = Async.DeferredList;
 var doXHR = Async.doXHR;
-var SimilarImageFinder = plugins.libpuzzle.SimilarImageFinder;
 
 var ORIGIN = "http://www.tumblr.com";
-var TITLE = __context__.NAME;
+var TITLE = "tumblr-liked";
 
 var REBLOG_INTERVAL_SEC = 3;
 var DOWNLOAD_INTERVAL_SEC = 0;
 var READPOST_INTERVAL_SEC = 1;
 var SIMILARITY_THRESHOLD = 0.2;
+
+function load(filenames) {
+	filenames = [].concat(filenames);
+	var dir = File(__context__.PATH).parent.path;
+	
+	var context = {};
+	filenames.forEach(function (filename) {
+		var file = File.joinPaths(dir, filename);
+		var uri = services.get("io").newFileURI(file).spec;
+		liberator.loadScript(uri, context);
+	});
+	return context;
+}
 
 var Config = {
 	get blogName() {
@@ -749,4 +747,3 @@ function convertToHTMLDocument(html, doc) {
 	return doc
 }
 
-}

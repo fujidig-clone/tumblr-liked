@@ -1,9 +1,9 @@
-Components.utils.import("resource://gre/modules/ctypes.jsm", __context__);
+Components.utils.import("resource://gre/modules/ctypes.jsm", this);
 var LIBPUZZLE_PATH = "/usr/local/lib/libpuzzle.so";
 
 function SimilarImageFinder() {
 	this.images = [];
-	this.puzzle = libpuzzle.open();
+	this.puzzle = open();
 }
 
 SimilarImageFinder.prototype.add = function(meta, binary) {
