@@ -30,15 +30,19 @@ var DOWNLOAD_INTERVAL_SEC = 0;
 var READPOST_INTERVAL_SEC = 1;
 var SIMILARITY_THRESHOLD = 0.2;
 
-function getConfiguredBlogName() {
-	var result = liberator.globalVariables.tumblrliked_blogname;
-	if (!result) throw "g:tumblrliked_blogname is not set";
-	return result;
-}
-
-function getConfiguredDir() {
-	return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
-}
+var Config = {
+	get blogName() {
+		var result = liberator.globalVariables.tumblrliked_blogname;
+		if (!result) throw "g:tumblrliked_blogname is not set";
+		return result;
+	},
+	get directoryToSave() {
+		return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
+	},
+	get enabledDuplicateChecker() {
+		return liberator.globalVariables.tumblrliked_enabled_duplicate_checker || false;
+	}
+};
 
 commands.add(
 	["tumblrliked"],
@@ -104,7 +108,7 @@ GUI.prototype._start_onTabLoad = function(event) {
 		</table>
 	</>;
 	this.doc.documentElement.appendChild(this.toDOM(html));
-	this.doc.querySelector("#directory").value = getConfiguredDir();
+	this.doc.querySelector("#directory").value = Config.directoryToSave;
 	this.changeStatus("collecting posts ...");
 	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this)).addErrback(liberator.echoerr);
 };
@@ -127,7 +131,8 @@ GUI.prototype._start_onReceivePosts = function(postElems) {
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
 	this.changeStatus("");
-	DuplicateChecker.start(this);
+	if (Config.enabledDuplicateChecker)
+		DuplicateChecker.start(this);
 };
 
 GUI.prototype.run = function() {
@@ -380,7 +385,7 @@ DuplicateChecker.prototype.changeStatus = function(text) {
 
 DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
 	var finder = new SimilarImageFinder();
-	return readBlogPosts(getConfiguredBlogName()).addCallback(function (posts) {
+	return readBlogPosts(Config.blogName).addCallback(function (posts) {
 		var images = [];
 		Array.forEach(posts, function (post) {
 			post.getThumbnailURLs().forEach(function (imageUrl) {
@@ -402,7 +407,7 @@ DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
 }
 
 function startDuplicateCheck() {
-	collectImagesAndBuildFinder(getConfiguredBlogName())
+	collectImagesAndBuildFinder(Config.blogName)
 	.addCallback(function ([finder, posts]) {
 		return newTab()
 			.addCallback(function (browser) [browser, finder, posts]);
@@ -475,7 +480,7 @@ function readBlogPosts(name, num) {
 
 // ブログの最新50件に含まれるリブログにぶちあたるまでのpostを集める
 function readLikedPostsUntilEncounterReblogged() {
-	return readBlogPosts(getConfiguredBlogName(), 50).addCallback(function (posts) {
+	return readBlogPosts(Config.blogName, 50).addCallback(function (posts) {
 		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
 		var terminatePredicate = function(allPosts, post) {
 			return keysRegexp.test(getPostReblogKey(post));
@@ -486,7 +491,7 @@ function readLikedPostsUntilEncounterReblogged() {
 
 // こっちはブログとlikedを最後のページまでアクセスして正確に未リブログだけを集める
 function readLikedPostsNotReblogged() {
-	return readBlogPosts(getConfiguredBlogName()).addCallback(function (posts) {
+	return readBlogPosts(Config.blogName).addCallback(function (posts) {
 		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
 		var terminatePredicate = function(allPosts, post) false;
 		var rejectPredicate = function(allPosts, post) {
