@@ -20,7 +20,7 @@ var Async = window.MochiKit.Async;
 var Deferred = Async.Deferred;
 var DeferredList = Async.DeferredList;
 var doXHR = Async.doXHR;
-var SimularImageFinder = plugins.libpuzzle.SimularImageFinder;
+var SimilarImageFinder = plugins.libpuzzle.SimilarImageFinder;
 
 var ORIGIN = "http://www.tumblr.com";
 var TITLE = __context__.NAME;
@@ -28,7 +28,7 @@ var TITLE = __context__.NAME;
 var REBLOG_INTERVAL_SEC = 3;
 var DOWNLOAD_INTERVAL_SEC = 0;
 var READPOST_INTERVAL_SEC = 1;
-var SIMILALY_THRESHOLD = 0.2;
+var SIMILARITY_THRESHOLD = 0.2;
 
 function getConfiguredBlogName() {
 	var result = liberator.globalVariables.tumblrliked_blogname;
@@ -364,7 +364,7 @@ DuplicateChecker.prototype.findDuplicate = function(finder, likedPosts, likedIma
 	var result = [];
 	likedPosts.forEach(function (likedPost, index) {
 		likedImages[index].forEach(function (image) {
-			finder.findByBinary(image, SIMILALY_THRESHOLD).forEach(function (res) {
+			finder.findByBinary(image, SIMILARITY_THRESHOLD).forEach(function (res) {
 				result.push({dist: res.dist,
 				             likedPost: likedPost,
 				             blogPost: res.image.meta.post});
@@ -379,7 +379,7 @@ DuplicateChecker.prototype.changeStatus = function(text) {
 };
 
 DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
-	var finder = new SimularImageFinder();
+	var finder = new SimilarImageFinder();
 	return readBlogPosts(getConfiguredBlogName()).addCallback(function (posts) {
 		var images = [];
 		Array.forEach(posts, function (post) {
@@ -413,7 +413,7 @@ function startDuplicateCheck() {
 			<table><tbody/></table>
 		</html>;
 		var tbody = html.table.tbody;
-		var results = finder.findAll(SIMILALY_THRESHOLD);
+		var results = finder.findAll(SIMILARITY_THRESHOLD);
 		results.forEach(function ([image1, image2, dist]) {
 			var tr = <tr/>;
 			tbody.appendChild(tr);

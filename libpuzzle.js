@@ -1,23 +1,23 @@
 Components.utils.import("resource://gre/modules/ctypes.jsm", __context__);
 var LIBPUZZLE_PATH = "/usr/local/lib/libpuzzle.so";
 
-function SimularImageFinder() {
+function SimilarImageFinder() {
 	this.images = [];
 	this.puzzle = libpuzzle.open();
 }
 
-SimularImageFinder.prototype.add = function(meta, binary) {
+SimilarImageFinder.prototype.add = function(meta, binary) {
 	var cvec = this.puzzle.createCvecFromImageBinary(binary);
 	var image = {meta: meta, cvec: cvec, index: this.images.length};
 	this.images.push(image);
 	return image;
 };
 
-SimularImageFinder.prototype.calcDistance = function(cvec1, cvec2) {
+SimilarImageFinder.prototype.calcDistance = function(cvec1, cvec2) {
 	return this.puzzle.vectorNormalizedDistance(cvec1, cvec2);
 };
 
-SimularImageFinder.prototype.findAll = function (threshold, callback) {
+SimilarImageFinder.prototype.findAll = function (threshold, callback) {
 	var images = this.images;
 	var self = this;
 	var results = [];
@@ -34,17 +34,17 @@ SimularImageFinder.prototype.findAll = function (threshold, callback) {
 	return results;
 };
 
-SimularImageFinder.prototype.find = function (image, threshold) {
+SimilarImageFinder.prototype.find = function (image, threshold) {
 	return this.findByCvec(image.cvec, threshold)
 		.filter(function(result) result.image != image);
 };
 
-SimularImageFinder.prototype.findByBinary = function (binary, threshold) {
+SimilarImageFinder.prototype.findByBinary = function (binary, threshold) {
 	var cvec = this.puzzle.createCvecFromImageBinary(binary);
 	return this.findByCvec(cvec, threshold);
 };
 
-SimularImageFinder.prototype.findByCvec = function(cvec, threshold) {
+SimilarImageFinder.prototype.findByCvec = function(cvec, threshold) {
 	var self = this;
 	return this.images
 		.map(function (other) {
@@ -54,7 +54,7 @@ SimularImageFinder.prototype.findByCvec = function(cvec, threshold) {
 		.filter(function (result) result.dist < threshold);
 };
 
-SimularImageFinder.prototype.close = function() {
+SimilarImageFinder.prototype.close = function() {
 	this.puzzle.close();
 };
 
