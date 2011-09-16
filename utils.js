@@ -30,6 +30,7 @@ function newTab() {
 	return deferred;
 
 	function callback() {
+		browser.removeEventListener("load", callback);
 		deferred.callback(browser);
 	}
 }

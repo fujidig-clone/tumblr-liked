@@ -15,12 +15,12 @@ GUI.start = function(funcToReadPost) {
 };
 
 GUI.prototype.start = function() {
-	this.browser = gBrowser.getBrowserForTab(gBrowser.addTab(""));
-	this.browser.addEventListener("load", this._start_onTabLoad.bind(this), true);
+	newTab().addCallback(this._start_onTabLoad.bind(this));
 };
 
-GUI.prototype._start_onTabLoad = function(event) {
-	this.doc = event.target;
+GUI.prototype._start_onTabLoad = function(browser) {
+	this.browser = browser;
+	this.doc = browser.contentDocument;
 	var html = <>
 		<title>{TITLE}</title>
 		<style type="text/css">
