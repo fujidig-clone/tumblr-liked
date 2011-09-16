@@ -28,19 +28,10 @@ function load(filenames) {
 	return context;
 }
 
-var Config = {
-	get blogName() {
-		var result = liberator.globalVariables.tumblrliked_blogname;
-		if (!result) throw "g:tumblrliked_blogname is not set";
-		return result;
-	},
-	get directoryToSave() {
-		return liberator.globalVariables.tumblrliked_dir || io.getCurrentDirectory().path;
-	},
-	get enabledDuplicateChecker() {
-		return liberator.globalVariables.tumblrliked_enabled_duplicate_checker || false;
-	}
-};
+Object.defineProperty(__context__, "Config", {
+	get: function() liberator.globalVariables.tumblrliked_config,
+	configurable: true
+});
 
 commands.add(
 	["tumblrliked"],
