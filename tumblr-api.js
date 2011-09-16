@@ -79,6 +79,9 @@ TumblrAPI.prototype.request = function(method, url, parameters) {
 	var realm = "";
 	var authorization = OAuth.getAuthorizationHeader(realm, message.parameters);
 	req.setRequestHeader("Authorization", authorization);
+	if (method == "POST") {
+		req.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+	}
 	return Async.sendXMLHttpRequest(req, requestBody);
 };
 

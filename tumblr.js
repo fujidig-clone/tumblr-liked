@@ -106,7 +106,7 @@ Tumblr.prototype.readBlogPosts = function (baseHostname, num) {
 
 Tumblr.prototype.reblogByPost = function(post) {
 	liberator.log("reblogging "+post.post_url);
-	return this.api.reblog(Config.baseHostname, {id: post.id, reblog_key: post.reblog_key});
+	return this.api.reblogPost(Config.baseHostname, {id: post.id, reblog_key: post.reblog_key});
 };
 
 Tumblr.wrapPost = function (post) {
