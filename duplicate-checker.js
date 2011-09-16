@@ -1,3 +1,5 @@
+var SIMILARITY_THRESHOLD = 0.2;
+
 function DuplicateChecker(gui) {
 	this.gui = gui;
 	this.outputElem = null;

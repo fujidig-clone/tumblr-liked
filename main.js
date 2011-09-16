@@ -13,33 +13,7 @@ var Deferred = Async.Deferred;
 var DeferredList = Async.DeferredList;
 var doXHR = Async.doXHR;
 
-var ORIGIN = "http://www.tumblr.com";
 var TITLE = "tumblr-liked";
-
-var REBLOG_INTERVAL_SEC = 3;
-var DOWNLOAD_INTERVAL_SEC = 0;
-var READPOST_INTERVAL_SEC = 1;
-var SIMILARITY_THRESHOLD = 0.2;
-
-function loadInNewContext(filenames) {
-	return loadGeneric(filenames, {});
-}
-
-function load(filenames) {
-	return loadGeneric(filenames, __context__);
-}
-
-function loadGeneric(filenames, context) {
-	filenames = [].concat(filenames);
-	var dir = File(__context__.PATH).parent.path;
-	
-	filenames.forEach(function (filename) {
-		var file = File.joinPaths(dir, filename);
-		var uri = services.get("io").newFileURI(file).spec;
-		liberator.loadScript(uri, context);
-	});
-	return context;
-}
 
 Object.defineProperty(__context__, "Config", {
 	get: function() liberator.globalVariables.tumblrliked_config,
@@ -64,5 +38,25 @@ function commandTumblrLiked(num) {
 		funcToReadPost = function (tumblr) tumblr.readLikedPostsUntilEncounterReblogged();
 	}
 	GUI.start(funcToReadPost);
+}
+
+function loadInNewContext(filenames) {
+	return loadGeneric(filenames, {});
+}
+
+function load(filenames) {
+	return loadGeneric(filenames, __context__);
+}
+
+function loadGeneric(filenames, context) {
+	filenames = [].concat(filenames);
+	var dir = File(__context__.PATH).parent.path;
+
+	filenames.forEach(function (filename) {
+		var file = File.joinPaths(dir, filename);
+		var uri = services.get("io").newFileURI(file).spec;
+		liberator.loadScript(uri, context);
+	});
+	return context;
 }
 

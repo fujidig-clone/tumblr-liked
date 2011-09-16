@@ -1,3 +1,7 @@
+var REBLOG_INTERVAL_SEC = 3;
+var DOWNLOAD_INTERVAL_SEC = 0;
+var READPOST_INTERVAL_SEC = 1;
+
 var GUI = function (funcToReadPost) {
 	this.tumblr = new Tumblr();
 	this.funcToReadPost = funcToReadPost;
