@@ -21,14 +21,14 @@ with(t) {
 		});
 	};
 	// リブログは実際に行わない
-	reblogByURL = function(reblogURL) {
-		liberator.log("[DUMMY] reblogging "+reblogURL);
+	Tumblr.prototype.reblogByPost = function (post) {
+		liberator.log("[DUMMY] reblogging "+post.post_url);
 		return Async.wait(0);
 	};
 	REBLOG_INTERVAL_SEC = 0.5;
 	DOWNLOAD_INTERVAL_SEC = 2;
 	READPOST_INTERVAL_SEC = 0;
-	detectMediaURLs = detectThumbnailURLs;
+	Tumblr.Post.prototype.getMediaURLs = Tumblr.Post.prototype.getThumbnailURLs;
 	commandTumblrLiked();
 }
 

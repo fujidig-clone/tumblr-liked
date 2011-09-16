@@ -1,6 +1,9 @@
-var libly = plugins.libly;
-var MochiKit = load(["MochiKit/Base.js", "MochiKit/Async.js"]).MochiKit;
-var SimilarImageFinder = load("libpuzzle.js").SimilarImageFinder;
+var MochiKit = loadInNewContext(["MochiKit/Base.js", "MochiKit/Async.js"]).MochiKit;
+var SimilarImageFinder = loadInNewContext("libpuzzle.js").SimilarImageFinder;
+var OAuth = loadInNewContext(["oauth.js", "sha1.js"]).OAuth;
+
+load("tumblr-api.js");
+load("tumblr.js");
 
 var Async = MochiKit.Async;
 var Deferred = Async.Deferred;
@@ -15,11 +18,18 @@ var DOWNLOAD_INTERVAL_SEC = 0;
 var READPOST_INTERVAL_SEC = 1;
 var SIMILARITY_THRESHOLD = 0.2;
 
+function loadInNewContext(filenames) {
+	return loadGeneric(filenames, {});
+}
+
 function load(filenames) {
+	return loadGeneric(filenames, __context__);
+}
+
+function loadGeneric(filenames, context) {
 	filenames = [].concat(filenames);
 	var dir = File(__context__.PATH).parent.path;
 	
-	var context = {};
 	filenames.forEach(function (filename) {
 		var file = File.joinPaths(dir, filename);
 		var uri = services.get("io").newFileURI(file).spec;
@@ -46,18 +56,19 @@ commands.add(
 function commandTumblrLiked(num) {
 	var funcToReadPost;
 	if (typeof num == "number") {
-		funcToReadPost = readLikedPosts.bind(null, num);
+		funcToReadPost = function (tumblr) tumblr.readLikedPosts(num);
 	} else {
-		funcToReadPost = readLikedPostsUntilEncounterReblogged;
+		funcToReadPost = function (tumblr) tumblr.readLikedPostsUntilEncounterReblogged();
 	}
 	GUI.start(funcToReadPost);
 }
 
 var GUI = function (funcToReadPost) {
+	this.tumblr = new Tumblr();
 	this.funcToReadPost = funcToReadPost;
 	this.browser = null;
 	this.doc = null;
-	this.posts = null;
+	this.guiPosts = null;
 };
 
 GUI.start = function(funcToReadPost) {
@@ -99,28 +110,28 @@ GUI.prototype._start_onTabLoad = function(event) {
 	this.doc.documentElement.appendChild(this.toDOM(html));
 	this.doc.querySelector("#directory").value = Config.directoryToSave;
 	this.changeStatus("collecting posts ...");
-	(this.funcToReadPost)().addCallback(this._start_onReceivePosts.bind(this)).addErrback(liberator.echoerr);
+	(this.funcToReadPost)(this.tumblr).addCallback(this._start_onReceivePosts.bind(this)).addErrback(liberator.echoerr);
 };
 
 GUI.prototype.changeStatus = function(text) {
 	replaceElemText(this.doc.querySelector("#status"), text);
 };
 
-GUI.prototype._start_onReceivePosts = function(postElems) {
-	postElems = postElems.reverse(); // 古い順に
+GUI.prototype._start_onReceivePosts = function(posts) {
+	posts = posts.reverse(); // 古い順に
 	var tbody = this.doc.querySelector("tbody");
 	var self = this;
-	var posts = this.posts = [];
-	postElems.forEach(function (postElem) {
-		var post = GUI.Post.build(self, postElem);
-		tbody.appendChild(post.tr);
-		posts.push(post);
+	var guiPosts = this.guiPosts = [];
+	posts.forEach(function (post) {
+		var guiPost = GUI.Post.build(self, post);
+		tbody.appendChild(guiPost.tr);
+		guiPosts.push(guiPost);
 	});
 	var button = this.doc.querySelector("button#run");
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
 	this.changeStatus("");
-	if (Config.enabledDuplicateChecker)
+	if (false && Config.enabledDuplicateChecker)
 		DuplicateChecker.start(this);
 };
 
@@ -164,34 +175,34 @@ GUI.prototype._run_changeGUIState = function(deferred) {
 };
 
 GUI.prototype.runReblog = function() {
-	return this.doAsyncProcessEachPostsWithWait(function(post) post.reblog(),
+	return this.doAsyncProcessEachPostsWithWait(function(guiPost) guiPost.reblog(),
 	                                            REBLOG_INTERVAL_SEC);
 };
 
 GUI.prototype.runDownload = function(dir) {
-	return this.doAsyncProcessEachPostsWithWait(function(post) post.download(dir),
+	return this.doAsyncProcessEachPostsWithWait(function(guiPost) guiPost.download(dir),
 	                                            DOWNLOAD_INTERVAL_SEC);
 };
 
 GUI.prototype.doAsyncProcessEachPostsWithWait = function(process, sec) {
 	var first = true;
-	return this.doAsyncProcessEachPosts(function(post) {
+	return this.doAsyncProcessEachPosts(function(guiPost) {
 		if (first) {
 			first = false;
-			return process(post);
+			return process(guiPost);
 		} else {
-			return Async.callLater(sec, process, post);
+			return Async.callLater(sec, process, guiPost);
 		}
 	});
 };
 
 GUI.prototype.doAsyncProcessEachPosts = function(process) {
-	var posts = this.posts;
+	var guiPosts = this.guiPosts;
 	return loop(0);
 	function loop(index) {
-		if (index >= posts.length) return Async.succeed();
-		var post = posts[index];
-		return process(post).addCallback(loop, index + 1);
+		if (index >= guiPosts.length) return Async.succeed();
+		var guiPost = guiPosts[index];
+		return process(guiPost).addCallback(loop, index + 1);
 	}
 };
 
@@ -199,29 +210,30 @@ GUI.prototype.toDOM = function(xml) {
 	return util.xmlToDom(xml, this.doc);
 };
 
-GUI.Post = function(postElem, tr, reblogProgressElem, media) {
-	this.postElem = postElem;
+GUI.Post = function(tumblr, post, tr, reblogProgressElem, media) {
+	this.tumblr = tumblr;
+	this.post = post;
 	this.tr = tr;
 	this.reblogProgressElem = reblogProgressElem;
 	this.media = media;
 };
 
-GUI.Post.build = function(gui, postElem) {
-	var url = getPermalinkURL(postElem);
+GUI.Post.build = function(gui, post) {
+	var url = post.post_url;
 	var tr = <tr><td class="img"/><td class="reblog"/><td class="download"/></tr>;
 	var imgTd = tr.td[0];
 	var dlTd = tr.td[2];
 	var imgContainer = <a href={url}/>;
 	imgTd.appendChild(imgContainer);
 
-	var thumbnailURLs = detectThumbnailURLs(postElem);
+	var thumbnailURLs = post.getThumbnailURLs();
 	thumbnailURLs.forEach(function(url)
 		imgContainer.appendChild(<img src={url}/>));
 	if (thumbnailURLs.length === 0) {
-		imgContainer.appendChild("(" + getPostType(postElem) + ")");
+		imgContainer.appendChild("(" + post.type + ")");
 	}
 
-	var mediaURLs = detectMediaURLs(postElem);
+	var mediaURLs = post.getMediaURLs();
 	mediaURLs.forEach(function (url) {
 		var fileName = getDefaultFileName(null, makeURI(url));
 		dlTd.appendChild(<><a href={url}>{fileName}</a><span class="progress"></span><br/></>);
@@ -240,14 +252,14 @@ GUI.Post.build = function(gui, postElem) {
 		};
 	});
 
-	return new GUI.Post(postElem, trNode, reblogProgressElem, media);
+	return new GUI.Post(gui.tumblr, post, trNode, reblogProgressElem, media);
 };
 
 GUI.Post.prototype.reblog = function() {
 	var self = this;
 	var progress = this.reblogProgressElem;
 	replaceElemText(progress, "Reblogging...");
-	return reblog(this.postElem).addCallback(function() {
+	return this.tumblr.reblogByPost(this.post).addCallback(function() {
 		replaceElemText(progress, "Reblogged");
 		progress.classList.add("done");
 	});
@@ -393,217 +405,6 @@ DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
 			return [finder, posts];
 		});
 	});
-}
-
-function startDuplicateCheck() {
-	collectImagesAndBuildFinder(Config.blogName)
-	.addCallback(function ([finder, posts]) {
-		return newTab()
-			.addCallback(function (browser) [browser, finder, posts]);
-	}).addCallback(function ([browser, finder, posts]) {
-		var doc = browser.contentDocument;
-		var html = <html>
-			<p>from {posts.length} posts</p>
-			<table><tbody/></table>
-		</html>;
-		var tbody = html.table.tbody;
-		var results = finder.findAll(SIMILARITY_THRESHOLD);
-		results.forEach(function ([image1, image2, dist]) {
-			var tr = <tr/>;
-			tbody.appendChild(tr);
-			tr.appendChild(<td>{dist.toFixed(3)}</td>);
-			[image1, image2].forEach(function (image) {
-				var post = image.meta.post;
-				var a = <a href={post.url}/>;
-				var date = new Date(post["date"]);
-				var dateStr = libly.$U.dateFormat(date);
-				a.appendChild(<>{dateStr}<br/></>);
-				post.getThumbnailURLs().forEach(function (imageUrl) {
-					a.appendChild(<img src={imageUrl}/>);
-				});
-				tr.appendChild(<td>{a}</td>);
-			});
-		});
-		if (results.length === 0) {
-			html.appendChild(<p>duplicate posts not found!</p>);
-		}
-		doc.documentElement.appendChild(util.xmlToDom(html.children(), doc));
-		finder.close();
-	}).addErrback(liberator.echoerr);
-}
-
-function PostDataFromAPI(data) {
-	libly.$U.extend(this, data);
-}
-
-PostDataFromAPI.prototype.getThumbnailURLs = function() {
-	if (this.type !== "photo") return [];
-	var photos = this.photos.length > 0 ? this.photos : [this];
-	return photos.map(function(photo) photo["photo-url-100"]);
-};
-
-function readBlogPosts(name, num) {
-	if (num == undefined) num = Infinity;
-	var posts = [];
-	function loop() {
-		var n = Math.min(num - posts.length, 50);
-		var url = "http://"+name+".tumblr.com/api/read/json?start="+posts.length+"&num="+n;
-		liberator.log(url);
-		return doXHR(url).addCallback(function (res) {
-			var json = res.responseText.replace(/^var tumblr_api_read = |;\s*$/g, "");
-			var data = JSON.parse(json);
-			data.posts.forEach(function (post) {
-				if (posts.length < num) {
-					posts.push(new PostDataFromAPI(post));
-				}
-			});
-			if (posts.length < Math.min(Number(data["posts-total"]), num)) {
-				return Async.callLater(READPOST_INTERVAL_SEC, loop);
-			} else {
-				return Async.succeed(posts);
-			}
-		});
-	}
-	return loop();
-}
-
-// ブログの最新50件に含まれるリブログにぶちあたるまでのpostを集める
-function readLikedPostsUntilEncounterReblogged() {
-	return readBlogPosts(Config.blogName, 50).addCallback(function (posts) {
-		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
-		var terminatePredicate = function(allPosts, post) {
-			return keysRegexp.test(getPostReblogKey(post));
-		}
-		return readLikedPostsWithPredicate(terminatePredicate);
-	});
-}
-
-// こっちはブログとlikedを最後のページまでアクセスして正確に未リブログだけを集める
-function readLikedPostsNotReblogged() {
-	return readBlogPosts(Config.blogName).addCallback(function (posts) {
-		var keysRegexp = genRegexp(posts.map(function (post) post["reblog-key"]));
-		var terminatePredicate = function(allPosts, post) false;
-		var rejectPredicate = function(allPosts, post) {
-			return keysRegexp.test(getPostReblogKey(post));
-		}
-		return readLikedPostsWithPredicate(terminatePredicate, rejectPredicate);
-	});
-}
-
-function readLikedPosts(num) {
-	var predicate = function(allPosts, post) allPosts.length >= num;
-	return readLikedPostsWithPredicate(predicate);
-}
-
-function readLikedPostsWithPredicate(terminatePredicate, rejectPredicate) {
-	rejectPredicate = rejectPredicate || function(allPosts, post) false;
-	var allPosts = [];
-	return loop(1);
-	function loop(page) {
-		return doXHR(ORIGIN + "/likes/page/" + page).addCallback(function (res) {
-			var doc = convertToHTMLDocument(res.responseText);
-			var posts = doc.querySelectorAll("#posts .post");
-			
-			for (var i = 0; i < posts.length; i ++) {
-				if (terminatePredicate(allPosts, posts[i])) {
-					break;
-				} else if (!rejectPredicate(allPosts, posts[i])) {
-					allPosts.push(posts[i]);
-				}
-			}
-			if (i < posts.length || !doc.querySelector("#next_page_link")) {
-				return Async.succeed(allPosts);
-			} else {
-				return loop(page + 1);
-			}
-		});
-	}
-}
-
-function reblog(postElem) {
-	var anchors = postElem.querySelectorAll("a");
-	var reblogAnchor = Array.filter(anchors, function(a)
-			     /^\/reblog\//.test(a.getAttribute("href")))[0];
-	var reblogURL = ORIGIN + reblogAnchor.getAttribute("href");
-	return reblogByURL(reblogURL);
-}
-
-function reblogByURL(reblogURL) {
-	liberator.log("reblogging "+reblogURL);
-	var redirect_to;
-	return doXHR(reblogURL).addCallback(function(res) {
-		var doc = convertToHTMLDocument(res.responseText);
-		var form = doc.querySelector("form#edit_post");
-		var store = formToKeyValueStore(form);
-		redirect_to = form.redirect_to;
-		delete store.preview_post;
-		var data = toQueryString(store);
-		return doXHR(reblogURL, {method: "POST", sendContent: data});
-	}).addCallback(function(res) {
-		if (res.channel.URI.spec.indexOf(ORIGIN + redirect_to)) {
-			liberator.log("reblog success: "+reblogURL);
-		} else {
-			throw new Error("post failed: "+res.transport.channel.URI.spec);
-		}
-	});
-}
-
-function detectThumbnailURLs(postElem) {
-	if (getPostType(postElem) !== "photo") return [];
-	return Array.map(postElem.querySelectorAll("img"), function(img) {
-		var url = img.getAttribute("src")
-		return url.replace(/_(250|500)\./, "_100.")
-	});
-}
-
-function detectMediaURLs(postElem) {
-	if (postElem.classList.contains("photo")) {
-		return detectPhotoURLs(postElem);
-	} else if (postElem.classList.contains("video")) {
-		return detectVideoURLs(postElem);
-	} else {
-		return [];
-	}
-}
-
-function detectPhotoURLs(postElem) {
-	var urls = [];
-	var highResLink = postElem.querySelector("a[id^=high_res_link_]");
-	if (highResLink) {
-		urls.push(highResLink.getAttribute("href"));
-	} else if (postElem.querySelector(".photoset_row")) {
-		Array.forEach(postElem.querySelectorAll(".photoset_row a"), function(a) {
-			urls.push(a.getAttribute("href"));
-		});
-	} else {
-		Array.forEach(postElem.querySelectorAll("img.image_thumbnail"), function(img) {
-			var onload = img.getAttribute("onload");
-			urls.push(onload.match(/this.src='([^']+)'/)[1]);
-		});
-	}
-	return urls;
-}
-
-function detectVideoURLs(postElem) {
-	var script = postElem.querySelector("span[id^=video_player_] + script");
-	if (!script) return [];
-	var matched = script.textContent.match(/^renderVideo\("[^"]+",'([^']+)'/);
-	return matched ? [matched[1]] : [];
-}
-
-function getPermalinkURL(postElem) {
-	return postElem.querySelector("a[id^=permalink_]").getAttribute("href");
-}
-
-function getPostType(postElem) {
-	var typesRegexp = /\b(text|quote|link|answer|video|audio|photo|regular)\b/;
-	var matched = postElem.className.match(typesRegexp);
-	return matched && matched[0];
-}
-
-function getPostReblogKey(postElem) {
-	var href = postElem.querySelector("a[href^='/reblog/']").getAttribute("href");
-	return href.match(/\/reblog\/\d+\/(\w+)/)[1];
 }
 
 function formToKeyValueStore(form) {
