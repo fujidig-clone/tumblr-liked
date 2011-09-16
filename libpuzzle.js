@@ -17,13 +17,14 @@ SimilarImageFinder.prototype.calcDistance = function(cvec1, cvec2) {
 	return this.puzzle.vectorNormalizedDistance(cvec1, cvec2);
 };
 
-SimilarImageFinder.prototype.findAll = function (threshold, callback) {
+SimilarImageFinder.prototype.findAll = function (threshold, ignorePredicate) {
 	var images = this.images;
 	var self = this;
 	var results = [];
 	images.forEach(function (image, i) {
 		for (var j = i + 1; j < images.length; j ++) {
 			var other = images[j];
+			if (ignorePredicate(image, other)) continue;
 			var dist = self.calcDistance(image.cvec, other.cvec);
 			if (dist < threshold) {
 				results.push([image, other, dist]);

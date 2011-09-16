@@ -70,7 +70,7 @@ GUI.prototype._start_onReceivePosts = function(posts) {
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
 	this.changeStatus("");
-	if (false && Config.enabledDuplicateChecker)
+	if (Config.enabledDuplicateChecker)
 		DuplicateChecker.start(this);
 };
 

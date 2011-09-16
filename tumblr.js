@@ -33,15 +33,31 @@ Tumblr.prototype.readLikedPostsNotReblogged = function () {
 	});
 }
 
+// likeは削除されたポストがあるとlimitより少ない数を返すようだ
+// そのときoffsetを返ってきた個数を足すと同じポストが重複してしまう
+// limitの数分足すと期待通り
+//
+// あとそのページのポストがすべて削除されている場合に返ってきた個数が0になることがあるから
+// 返ってきた個数が0であることを終了条件にしてはいけない
 Tumblr.prototype.readLikedPostsGeneric = function (terminatePredicate, rejectPredicate) {
 	rejectPredicate = rejectPredicate || function () false;
 	var api = this.api;
 	var allPosts = [];
+	const LIMIT = 20;
 	var offset = 0;
+	var count = 0;
+	var allCount;
+	function getAllCount() {
+		return api.infoUser().addCallback(function(res) {
+			allCount = res.user.likes;
+		});
+	}
+	return getAllCount().addCallback(loop);
 	function loop() {
-		return api.likes({offset: offset}).addCallback(function (res) {
+		return api.likes({offset: offset, limit: LIMIT}).addCallback(function (res) {
 			var posts = res.liked_posts;
-			offset += posts.length;
+			offset += LIMIT;
+			count += posts.length;
 
 			for (var i = 0; i < posts.length; i ++) {
 				var post = Tumblr.wrapPost(posts[i]);
@@ -51,14 +67,13 @@ Tumblr.prototype.readLikedPostsGeneric = function (terminatePredicate, rejectPre
 					allPosts.push(post);
 				}
 			}
-			if (i < posts.length || posts.length === 0) {
+			if (i < posts.length || offset >= allCount) {
 				return Async.succeed(allPosts);
 			} else {
 				return loop();
 			}
 		});
 	}
-	return loop();
 };
 
 // postsのAPIはlimitを大きくすれば一度に数百件とかでも返してくれる模様

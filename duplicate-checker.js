@@ -2,6 +2,7 @@ var SIMILARITY_THRESHOLD = 0.2;
 
 function DuplicateChecker(gui) {
 	this.gui = gui;
+	this.tumblr = gui.tumblr;
 	this.outputElem = null;
 }
 
@@ -13,7 +14,7 @@ DuplicateChecker.prototype.start = function() {
 	var xml = <div id="duplicate-checker">
 		<h2>Duplicate Checker</h2>
 		<p class="status"/>
-		<div class="result"/>
+		<table class="result"/>
 	</div>;
 	var style = <style type="text/css">
 		/*<![CDATA[*/
@@ -33,68 +34,76 @@ DuplicateChecker.prototype.start = function() {
 	this.collectImages().addCallback(this.checkDuplicate.bind(this)).addErrback(liberator.echoerr);
 };
 
-DuplicateChecker.prototype.collectImages = function() {
-	var self = this;
-	return this.collectBlogImagesAndBuildFinder().addCallback(function ([finder, blogPosts]) {
-		return self.loadLikedImages().addCallback(function (likedImages) {
-			return [finder, blogPosts, likedImages];
-		});
-	});
-}
-
-DuplicateChecker.prototype.loadLikedImages = function() {
-	var list = [];
-	var result = [];
-	this.gui.posts.forEach(function (post, i) {
-		result[i] = [];
-		detectThumbnailURLs(post.postElem).forEach(function (url, j) {
-			list.push(loadImage(url).addCallback(function (binary) {
-				result[i][j] = binary;
-			}));
-		})
-	});
-	return doParallel(list).addCallback(function () result);
-};
-
-DuplicateChecker.prototype.checkDuplicate = function([finder, blogPosts, likedImages]) {
+DuplicateChecker.prototype.checkDuplicate = function(finder) {
 	this.changeStatus("checking duplicate");
-	var result = this.findDuplicate(finder, this.gui.posts, likedImages);
-	var output = <div/>;
-	result.forEach(function(res) {
-		detectThumbnailURLs(res.likedPost.postElem).forEach(function(url) {
-			output.appendChild(<img src={url}/>);
-		});
-		res.blogPost.getThumbnailURLs().forEach(function(url) {
-			output.appendChild(<img src={url}/>);
-		});
-		output.appendChild(<br/>);
-	});
-	replaceElemChild(this.outputElem.querySelector("div.result"), this.gui.toDOM(output.children()));
-	finder.close();
+	return Async.callLater(0, this.checkDuplicate0.bind(this, finder));
 };
 
-DuplicateChecker.prototype.findDuplicate = function(finder, likedPosts, likedImages) {
-	var likedPosts = this.gui.posts;
-	var result = [];
-	likedPosts.forEach(function (likedPost, index) {
-		likedImages[index].forEach(function (image) {
-			finder.findByBinary(image, SIMILARITY_THRESHOLD).forEach(function (res) {
-				result.push({dist: res.dist,
-				             likedPost: likedPost,
-				             blogPost: res.image.meta.post});
+DuplicateChecker.prototype.checkDuplicate0 = function (finder) {
+	var ignore = function (image1, image2) {
+		return image1.meta.source === "blog" && image2.meta.source === "blog";
+	}
+	var result = finder.findAll(SIMILARITY_THRESHOLD, ignore);
+	finder.close();
+	if (result.length === 0) {
+		this.changeStatus("duplicate images not found");
+	} else {
+		this.changeStatus("found duplicate images");
+	}
+	var output = <tbody/>;
+	result.forEach(function([image1, image2, dist]) {
+		var tr = <tr><td/><td/></tr>;
+		output.appendChild(tr);
+		[image1, image2].forEach(function (image, i) {
+			var post = image.meta.post;
+			var source = image.meta.source;
+			td = tr.td[i];
+			var a = <a href={post.post_url}/>;
+			td.appendChild(a);
+			post.getThumbnailURLs().forEach(function(url) {
+				a.appendChild(<img src={url}/>);
+			});
+			td.appendChild(<br/>);
+			td.appendChild(<>{source}<br/></>);
+			td.appendChild(<>{post.reblog_key}<br/></>);
+			post.getPhotos().forEach(function (photo) {
+				td.appendChild(<a href={photo.url}>{photo.width}x{photo.height}</a>);
+				td.appendChild(" ");
 			});
 		});
 	});
-	return result;
+	replaceElemChild(this.outputElem.querySelector("table.result"), this.gui.toDOM(output));
 };
 
 DuplicateChecker.prototype.changeStatus = function(text) {
 	replaceElemText(this.outputElem.querySelector("p.status"), text);
 };
 
-DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
+DuplicateChecker.prototype.collectImages = function() {
 	var finder = new SimilarImageFinder();
-	return readBlogPosts(Config.blogName).addCallback(function (posts) {
+	var d = Async.succeed();
+	d.addCallback(this.addBlogImages.bind(this, finder));
+	d.addCallback(this.addLikedImages.bind(this, finder));
+	d.addCallback(function() finder);
+	return d;
+}
+
+DuplicateChecker.prototype.addLikedImages = function(finder) {
+	var list = [];
+	this.gui.guiPosts.forEach(function (guiPost, i) {
+		var post = guiPost.post;
+		post.getThumbnailURLs().forEach(function (url, j) {
+			list.push(loadImage(url).addCallback(function (binary) {
+				var meta = {imageUrl: url, post: post, source: "liked"};
+				finder.add(meta, binary);
+			}));
+		})
+	});
+	return doParallel(list);
+};
+
+DuplicateChecker.prototype.addBlogImages = function(finder) {
+	return this.tumblr.readBlogPosts(Config.baseHostname).addCallback(function (posts) {
 		var images = [];
 		Array.forEach(posts, function (post) {
 			post.getThumbnailURLs().forEach(function (imageUrl) {
@@ -105,12 +114,10 @@ DuplicateChecker.prototype.collectBlogImagesAndBuildFinder = function() {
 			liberator.log(imageUrl);
 			return loadImage(imageUrl)
 				.addCallback(function (binary) {
-					var meta = {imageUrl: imageUrl, post: post};
+					var meta = {imageUrl: imageUrl, post: post, source: "blog"};
 					finder.add(meta, binary);
 				});
 		});
-		return new DeferredList(list, false, true, false).addCallback(function() {
-			return [finder, posts];
-		});
+		return new DeferredList(list, false, true, false);
 	});
 }
