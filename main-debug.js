@@ -5,19 +5,22 @@ window.t = plugins.contexts[path];
 with(t) {
 	TITLE += " (DEBUG)";
 	// デバッグ中サーバーに負荷をかけないようにcacheする
-	doXHR = function(url, opts) {
-		if (!__context__.CACHE) __context__.CACHE = {};
-		var CACHE = __context__.CACHE;
+	var orig = Async.sendXMLHttpRequest;
+	Async.sendXMLHttpRequest = function(req, body) {
+		if (!t.CACHE) t.CACHE = {};
+		var CACHE = t.CACHE;
+		if (req.channel.URI.host !== "api.tumblr.com") {
+			return orig.apply(this, arguments);
+		}
+		var url = req.channel.URI.spec;
 		if (CACHE[url]) {
 			liberator.log("CACHE HIT: "+url);
 			return Async.wait(0, CACHE[url]);
 		}
-
-		var d = Async.doXHR(url, opts);
-		return d.addCallback(function(res) {
-			CACHE[url] = res;
+		return orig.apply(this, arguments).addCallback(function (req) {
+			CACHE[url] = req;
 			liberator.log("CACHE STORE: "+url);
-			return res;
+			return req;
 		});
 	};
 	// リブログは実際に行わない

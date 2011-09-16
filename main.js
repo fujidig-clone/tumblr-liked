@@ -11,7 +11,6 @@ load("duplicate-checker.js");
 var Async = MochiKit.Async;
 var Deferred = Async.Deferred;
 var DeferredList = Async.DeferredList;
-var doXHR = Async.doXHR;
 
 var TITLE = "tumblr-liked";
 
