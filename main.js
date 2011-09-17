@@ -14,6 +14,20 @@ var DeferredList = Async.DeferredList;
 
 var TITLE = "tumblr-liked";
 
+/*
+Example:
+liberator.globalVariables.tumblrliked_config = {
+	baseHostname: "<blog name>.tumblr.com",
+	directoryToSave: "~/tmp",
+	enabledDuplicateChecker: false,
+	oauthAccessor: {
+		consumerKey    : "<consumer key>",
+		consumerSecret : "<consumer secret>",
+		token          : "<access token>",
+		tokenSecret    : "<access token secret>",
+	},
+};
+*/
 Object.defineProperty(__context__, "Config", {
 	get: function () liberator.globalVariables.tumblrliked_config,
 	configurable: true
