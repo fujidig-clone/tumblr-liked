@@ -151,10 +151,7 @@ Puzzle.prototype.declareFunctions = function () {
 		var newName = name.replace(/^puzzle_/, "_");
 		self[newName] = function () {
 			var args = [P(this.puzzleContext)].concat(Array.slice(arguments));
-			// FunctionType.ptr には apply とか定義されていないので
-			// 可変長の引数を渡すには現状evalしかないっぽい
-			var s = "internal(" + args.map(function (arg, i) "args["+i+"]").join(", ") + ")";
-			return eval(s);
+			return Function.prototype.apply.call(internal, null, args);
 		};
 	}
 	function getFunc(name, returnValueType, argTypes) {
