@@ -81,7 +81,8 @@ Context.prototype.createCvecFromImageBinary = function (bytes) {
 	var array = new UcharArray(Array.slice(bytes));
 	var cvec = new PuzzleCvec();
 	this._init_cvec(P(cvec));
-	this._fill_cvec_from_mem(P(cvec), P(array), array.length);
+	var ret = this._fill_cvec_from_mem(P(cvec), P(array), array.length);
+	if (ret !== 0) throw "failed to create cvec";
 	var vec = ctypes.cast(cvec.vec, ctypes.signed_char.array(cvec.sizeof_vec).ptr).contents;
 	vec = new vec.constructor(vec); // copy
 	this._free_cvec(P(cvec));
