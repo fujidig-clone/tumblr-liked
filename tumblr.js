@@ -104,6 +104,34 @@ Tumblr.prototype.readBlogPosts = function (baseHostname, num) {
 	return loop();
 };
 
+Tumblr.prototype.readBlogPostsWithPredicate = function (baseHostname, predicate) {
+	var posts = [];
+	var api = this.api;
+
+	function loop() {
+		return api.posts(baseHostname, {offset: posts.length}).addCallback(function (res) {
+			for (var i = 0; i < res.posts.length; i ++) {
+				var post = res.posts[i];
+				if (predicate(post)) break;
+				posts.push(Tumblr.wrapPost(post));
+			}
+			if (i < res.posts.length || res.posts.length === 0) {
+				return Async.succeed(posts);
+			} else {
+				return loop();
+			}
+		});
+	}
+	return loop();
+};
+
+Tumblr.prototype.readBlogPost = function (baseHostname, id) {
+	return this.api.posts(baseHostname, {id: id}).addCallback(function (res) {
+		var post = res.posts[0];
+		return Tumblr.wrapPost(post);
+	});
+};
+
 Tumblr.prototype.reblogByPost = function(post) {
 	liberator.log("reblogging "+post.post_url);
 	return this.api.reblogPost(Config.baseHostname, {id: post.id, reblog_key: post.reblog_key});

@@ -1,5 +1,5 @@
 var MochiKit = loadInNewContext(["MochiKit/Base.js", "MochiKit/Async.js"]).MochiKit;
-var SimilarImageFinder = loadInNewContext("libpuzzle.js").SimilarImageFinder;
+var {SimilarImageFinder, Puzzle} = loadInNewContext("libpuzzle.js");
 var OAuth = loadInNewContext(["oauth.js", "sha1.js"]).OAuth;
 
 load("utils.js");
