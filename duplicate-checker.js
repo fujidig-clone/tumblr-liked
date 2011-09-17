@@ -6,11 +6,11 @@ function DuplicateChecker(gui) {
 	this.outputElem = null;
 }
 
-DuplicateChecker.start = function(gui) {
+DuplicateChecker.start = function (gui) {
 	new DuplicateChecker(gui).start();
 };
 
-DuplicateChecker.prototype.start = function() {
+DuplicateChecker.prototype.start = function () {
 	var xml = <div id="duplicate-checker">
 		<h2>Duplicate Checker</h2>
 		<p class="status"/>
@@ -34,7 +34,7 @@ DuplicateChecker.prototype.start = function() {
 	this.collectImages().addCallback(this.checkDuplicate.bind(this)).addErrback(liberator.echoerr);
 };
 
-DuplicateChecker.prototype.checkDuplicate = function(finder) {
+DuplicateChecker.prototype.checkDuplicate = function (finder) {
 	this.changeStatus("checking duplicate");
 	return Async.callLater(0, this.checkDuplicate0.bind(this, finder));
 };
@@ -56,7 +56,7 @@ DuplicateChecker.prototype.showResult = function (result) {
 		this.changeStatus("found duplicate images");
 	}
 	var output = <tbody/>;
-	result.forEach(function([image1, image2, dist]) {
+	result.forEach(function ([image1, image2, dist]) {
 		var tr = <tr><td/><td/></tr>;
 		output.appendChild(tr);
 		[image1, image2].forEach(function (image, i) {
@@ -65,7 +65,7 @@ DuplicateChecker.prototype.showResult = function (result) {
 			td = tr.td[i];
 			var a = <a href={post.post_url}/>;
 			td.appendChild(a);
-			post.getThumbnailURLs().forEach(function(url) {
+			post.getThumbnailURLs().forEach(function (url) {
 				a.appendChild(<img src={url}/>);
 			});
 			td.appendChild(<br/>);
@@ -80,21 +80,21 @@ DuplicateChecker.prototype.showResult = function (result) {
 	replaceElemChild(this.outputElem.querySelector("table.result"), this.gui.toDOM(output));
 };
 
-DuplicateChecker.prototype.changeStatus = function(text) {
+DuplicateChecker.prototype.changeStatus = function (text) {
 	replaceElemText(this.outputElem.querySelector("p.status"), text);
 };
 
-DuplicateChecker.prototype.collectImages = function() {
+DuplicateChecker.prototype.collectImages = function () {
 	var puzzle = Puzzle.open();
 	var finder = new SimilarImageFinder(puzzle);
 	var d = Async.succeed();
 	d.addCallback(this.addBlogImages.bind(this, finder));
 	d.addCallback(this.addLikedImages.bind(this, finder));
-	d.addCallback(function() finder);
+	d.addCallback(function () finder);
 	return d;
 }
 
-DuplicateChecker.prototype.addLikedImages = function(finder) {
+DuplicateChecker.prototype.addLikedImages = function (finder) {
 	var list = [];
 	this.gui.guiPosts.forEach(function (guiPost, i) {
 		var post = guiPost.post;
@@ -108,7 +108,7 @@ DuplicateChecker.prototype.addLikedImages = function(finder) {
 	return doParallel(list);
 };
 
-DuplicateChecker.prototype.addBlogImages = function(finder) {
+DuplicateChecker.prototype.addBlogImages = function (finder) {
 	var d = new BlogImageCollector(this.tumblr, finder.puzzle).collect();
 	return d.addCallback(function (images) {
 		images.forEach(function (image) {
@@ -143,7 +143,7 @@ DuplicateChecker.prototype.loadPostsOfResult = function (result) {
 	}
 };
 
-var BlogImageCollector = function(tumblr, puzzle) {
+var BlogImageCollector = function (tumblr, puzzle) {
 	this.tumblr = tumblr;
 	this.puzzle = puzzle;
 };

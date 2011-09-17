@@ -9,15 +9,15 @@ var GUI = function (funcToReadPost) {
 	this.guiPosts = null;
 };
 
-GUI.start = function(funcToReadPost) {
+GUI.start = function (funcToReadPost) {
 	new GUI(funcToReadPost).start();
 };
 
-GUI.prototype.start = function() {
+GUI.prototype.start = function () {
 	newTab().addCallback(this._start_onTabLoad.bind(this));
 };
 
-GUI.prototype._start_onTabLoad = function(browser) {
+GUI.prototype._start_onTabLoad = function (browser) {
 	this.browser = browser;
 	this.doc = browser.contentDocument;
 	var html = <>
@@ -51,11 +51,11 @@ GUI.prototype._start_onTabLoad = function(browser) {
 	(this.funcToReadPost)(this.tumblr).addCallback(this._start_onReceivePosts.bind(this)).addErrback(liberator.echoerr);
 };
 
-GUI.prototype.changeStatus = function(text) {
+GUI.prototype.changeStatus = function (text) {
 	replaceElemText(this.doc.querySelector("#status"), text);
 };
 
-GUI.prototype._start_onReceivePosts = function(posts) {
+GUI.prototype._start_onReceivePosts = function (posts) {
 	posts = posts.reverse(); // 古い順に
 	var tbody = this.doc.querySelector("tbody");
 	var self = this;
@@ -73,34 +73,34 @@ GUI.prototype._start_onReceivePosts = function(posts) {
 		DuplicateChecker.start(this);
 };
 
-GUI.prototype.run = function() {
+GUI.prototype.run = function () {
 	var dir = this.doc.querySelector("#directory").value;
 	var deferredList = new DeferredList([this.runReblog(), this.runDownload(dir)],
 	                                    false, true, false,
-		                            function(d) d.list.forEach(function(e) e.cancel()));
+		                            function (d) d.list.forEach(function (e) e.cancel()));
 	this._run_changeGUIState(deferredList);
 };
 
-GUI.prototype._run_changeGUIState = function(deferred) {
+GUI.prototype._run_changeGUIState = function (deferred) {
 	var self = this;
 	var runButton = this.doc.querySelector("button#run");
 	var cancelButton = this.doc.querySelector("button#cancel");
 	runButton.disabled = true;
 	cancelButton.disabled = false;
 
-	var onClickCancelButton = function() {
+	var onClickCancelButton = function () {
 		deferred.cancel();
 		self.changeStatus("canceled");
 		dispose();
 	};
-	var onUnload = function() {
+	var onUnload = function () {
 		deferred.cancel();
 	};
 	cancelButton.addEventListener("click", onClickCancelButton, false);
 	this.browser.contentWindow.addEventListener("unload", onUnload, false);
 
 	this.changeStatus("runnning ...");
-	deferred.addCallback(function() {
+	deferred.addCallback(function () {
 		dispose();
 		self.changeStatus("finish!");
 	});
@@ -112,19 +112,19 @@ GUI.prototype._run_changeGUIState = function(deferred) {
 	}
 };
 
-GUI.prototype.runReblog = function() {
-	return this.doAsyncProcessEachPostsWithWait(function(guiPost) guiPost.reblog(),
+GUI.prototype.runReblog = function () {
+	return this.doAsyncProcessEachPostsWithWait(function (guiPost) guiPost.reblog(),
 	                                            REBLOG_INTERVAL_SEC);
 };
 
-GUI.prototype.runDownload = function(dir) {
-	return this.doAsyncProcessEachPostsWithWait(function(guiPost) guiPost.download(dir),
+GUI.prototype.runDownload = function (dir) {
+	return this.doAsyncProcessEachPostsWithWait(function (guiPost) guiPost.download(dir),
 	                                            DOWNLOAD_INTERVAL_SEC);
 };
 
-GUI.prototype.doAsyncProcessEachPostsWithWait = function(process, sec) {
+GUI.prototype.doAsyncProcessEachPostsWithWait = function (process, sec) {
 	var first = true;
-	return this.doAsyncProcessEachPosts(function(guiPost) {
+	return this.doAsyncProcessEachPosts(function (guiPost) {
 		if (first) {
 			first = false;
 			return process(guiPost);
@@ -134,7 +134,7 @@ GUI.prototype.doAsyncProcessEachPostsWithWait = function(process, sec) {
 	});
 };
 
-GUI.prototype.doAsyncProcessEachPosts = function(process) {
+GUI.prototype.doAsyncProcessEachPosts = function (process) {
 	var guiPosts = this.guiPosts;
 	return loop(0);
 	function loop(index) {
@@ -144,11 +144,11 @@ GUI.prototype.doAsyncProcessEachPosts = function(process) {
 	}
 };
 
-GUI.prototype.toDOM = function(xml) {
+GUI.prototype.toDOM = function (xml) {
 	return util.xmlToDom(xml, this.doc);
 };
 
-GUI.Post = function(tumblr, post, tr, reblogProgressElem, media) {
+GUI.Post = function (tumblr, post, tr, reblogProgressElem, media) {
 	this.tumblr = tumblr;
 	this.post = post;
 	this.tr = tr;
@@ -156,7 +156,7 @@ GUI.Post = function(tumblr, post, tr, reblogProgressElem, media) {
 	this.media = media;
 };
 
-GUI.Post.build = function(gui, post) {
+GUI.Post.build = function (gui, post) {
 	var url = post.post_url;
 	var tr = <tr><td class="img"/><td class="reblog"/><td class="download"/></tr>;
 	var imgTd = tr.td[0];
@@ -165,7 +165,7 @@ GUI.Post.build = function(gui, post) {
 	imgTd.appendChild(imgContainer);
 
 	var thumbnailURLs = post.getThumbnailURLs();
-	thumbnailURLs.forEach(function(url)
+	thumbnailURLs.forEach(function (url)
 		imgContainer.appendChild(<img src={url}/>));
 	if (thumbnailURLs.length === 0) {
 		imgContainer.appendChild("(" + post.type + ")");
@@ -193,17 +193,17 @@ GUI.Post.build = function(gui, post) {
 	return new GUI.Post(gui.tumblr, post, trNode, reblogProgressElem, media);
 };
 
-GUI.Post.prototype.reblog = function() {
+GUI.Post.prototype.reblog = function () {
 	var self = this;
 	var progress = this.reblogProgressElem;
 	replaceElemText(progress, "Reblogging...");
-	return this.tumblr.reblogByPost(this.post).addCallback(function() {
+	return this.tumblr.reblogByPost(this.post).addCallback(function () {
 		replaceElemText(progress, "Reblogged");
 		progress.classList.add("done");
 	});
 };
 
-GUI.Post.prototype.download = function(dir) {
+GUI.Post.prototype.download = function (dir) {
 	var self = this;
 	var failed = false;
 	function loop(index) {
@@ -223,7 +223,7 @@ GUI.Post.prototype.download = function(dir) {
 			replaceElemText(m.progressElem, (cur / max * 100).toFixed(1) + " %");
 		}
 	}
-	return loop(0).addCallback(function() {
+	return loop(0).addCallback(function () {
 		if (!failed) {
 			self.tr.querySelector("td.download").classList.add("done");
 		}

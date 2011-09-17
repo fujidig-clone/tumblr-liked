@@ -5,7 +5,7 @@ function Tumblr() {
 }
 
 Tumblr.prototype.readLikedPosts = function (num) {
-	var predicate = function(allPosts, post) allPosts.length >= num;
+	var predicate = function (allPosts, post) allPosts.length >= num;
 	return this.readLikedPostsGeneric(predicate);
 };
 
@@ -14,7 +14,7 @@ Tumblr.prototype.readLikedPostsUntilEncounterReblogged = function () {
 	var self = this;
 	return this.readBlogPosts(Config.baseHostname, RECENTLY_BLOG_POSTS_NUM).addCallback(function (posts) {
 		var keys = new Set(posts.map(function (post) post.reblog_key));
-		var terminatePredicate = function(allPosts, post) {
+		var terminatePredicate = function (allPosts, post) {
 			return keys.has(post.reblog_key);
 		}
 		return self.readLikedPostsGeneric(terminatePredicate);
@@ -25,8 +25,8 @@ Tumblr.prototype.readLikedPostsUntilEncounterReblogged = function () {
 Tumblr.prototype.readLikedPostsNotReblogged = function () {
 	return this.readBlogPosts(Config.baseHostname).addCallback(function (posts) {
 		var keys = new Set(posts.map(function (post) post.reblog_key));
-		var terminatePredicate = function(allPosts, post) false;
-		var rejectPredicate = function(allPosts, post) {
+		var terminatePredicate = function (allPosts, post) false;
+		var rejectPredicate = function (allPosts, post) {
 			return keys.has(post.reblog_key);
 		}
 		return self.readLikedPostsGeneric(terminatePredicate, rejectPredicate);
@@ -48,7 +48,7 @@ Tumblr.prototype.readLikedPostsGeneric = function (terminatePredicate, rejectPre
 	var count = 0;
 	var allCount;
 	function getAllCount() {
-		return api.infoUser().addCallback(function(res) {
+		return api.infoUser().addCallback(function (res) {
 			allCount = res.user.likes;
 		});
 	}
@@ -132,7 +132,7 @@ Tumblr.prototype.readBlogPost = function (baseHostname, id) {
 	});
 };
 
-Tumblr.prototype.reblogByPost = function(post) {
+Tumblr.prototype.reblogByPost = function (post) {
 	liberator.log("reblogging "+post.post_url);
 	return this.api.reblogPost(Config.baseHostname, {id: post.id, reblog_key: post.reblog_key});
 };
@@ -174,7 +174,7 @@ Tumblr.Post.prototype.getPhotos = function () {
 Tumblr.Post.prototype.getVideoURLs = function () {
 	if (this.type !== "video")
 		return [];
-	var embedCode = this.player.sort(function(a, b) a.width - b.width).reverse()[0].embed_code;
+	var embedCode = this.player.sort(function (a, b) a.width - b.width).reverse()[0].embed_code;
 	var matched = embedCode.match(/^renderVideo\("[^"]+",'([^']+)'/);
 	return matched ? [matched[1]] : [];
 };

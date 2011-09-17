@@ -15,7 +15,7 @@ var DeferredList = Async.DeferredList;
 var TITLE = "tumblr-liked";
 
 Object.defineProperty(__context__, "Config", {
-	get: function() liberator.globalVariables.tumblrliked_config,
+	get: function () liberator.globalVariables.tumblrliked_config,
 	configurable: true
 });
 

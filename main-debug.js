@@ -6,7 +6,7 @@ with(t) {
 	TITLE += " (DEBUG)";
 	// デバッグ中サーバーに負荷をかけないようにcacheする
 	var orig = Async.sendXMLHttpRequest;
-	Async.sendXMLHttpRequest = function(req, body) {
+	Async.sendXMLHttpRequest = function (req, body) {
 		if (!t.CACHE) t.CACHE = {};
 		var CACHE = t.CACHE;
 		if (req.channel.URI.host !== "api.tumblr.com") {

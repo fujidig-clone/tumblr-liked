@@ -3,7 +3,7 @@ function TumblrAPI(accessor) {
 	this.baseURL = "http://api.tumblr.com";
 }
 
-TumblrAPI.addCallbackForToJSON = function(deferred) {
+TumblrAPI.addCallbackForToJSON = function (deferred) {
 	return deferred.addCallback(function (req) {
 		return JSON.parse(req.responseText).response;
 	});
@@ -36,7 +36,7 @@ TumblrAPI.API_SETTINGS.forEach(function (setting) {
 	httpMethod = httpMethod || "get";
 	var requiredBaseHostname = /%s/.test(path);
 
-	TumblrAPI.prototype[methodName] = function() {
+	TumblrAPI.prototype[methodName] = function () {
 		var params, url;
 		if (requiredBaseHostname) {
 			var baseHostname = arguments[0];
@@ -53,15 +53,15 @@ TumblrAPI.API_SETTINGS.forEach(function (setting) {
 	};
 });
 
-TumblrAPI.prototype.get = function(url, parameters) {
+TumblrAPI.prototype.get = function (url, parameters) {
 	return TumblrAPI.addCallbackForToJSON(this.request("GET", url, parameters));
 };
 
-TumblrAPI.prototype.post = function(url, parameters) {
+TumblrAPI.prototype.post = function (url, parameters) {
 	return TumblrAPI.addCallbackForToJSON(this.request("POST", url, parameters));
 };
 
-TumblrAPI.prototype.request = function(method, url, parameters) {
+TumblrAPI.prototype.request = function (method, url, parameters) {
 	liberator.log("TumblrAPI#request "+uneval([method, url, parameters]));
 	var message = {method: method,
 	               action: url,

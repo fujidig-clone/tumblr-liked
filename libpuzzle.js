@@ -6,7 +6,7 @@ function SimilarImageFinder(puzzle) {
 	this.puzzle = puzzle;
 }
 
-SimilarImageFinder.prototype.add = function(meta, binary) {
+SimilarImageFinder.prototype.add = function (meta, binary) {
 	var cvec = this.puzzle.createCvecFromImageBinary(binary);
 	return this.addByCvec(meta, binary);
 };
@@ -17,7 +17,7 @@ SimilarImageFinder.prototype.addByCvec = function (meta, cvec) {
 	return image;
 };
 
-SimilarImageFinder.prototype.calcDistance = function(cvec1, cvec2) {
+SimilarImageFinder.prototype.calcDistance = function (cvec1, cvec2) {
 	return this.puzzle.vectorNormalizedDistance(cvec1, cvec2);
 };
 
@@ -41,7 +41,7 @@ SimilarImageFinder.prototype.findAll = function (threshold, ignorePredicate) {
 
 SimilarImageFinder.prototype.find = function (image, threshold) {
 	return this.findByCvec(image.cvec, threshold)
-		.filter(function(result) result.image != image);
+		.filter(function (result) result.image != image);
 };
 
 SimilarImageFinder.prototype.findByBinary = function (binary, threshold) {
@@ -49,7 +49,7 @@ SimilarImageFinder.prototype.findByBinary = function (binary, threshold) {
 	return this.findByCvec(cvec, threshold);
 };
 
-SimilarImageFinder.prototype.findByCvec = function(cvec, threshold) {
+SimilarImageFinder.prototype.findByCvec = function (cvec, threshold) {
 	var self = this;
 	return this.images
 		.map(function (other) {
@@ -71,7 +71,7 @@ Puzzle.open = function () {
 	return new Puzzle(libpuzzle);
 };
 
-Puzzle.prototype.close = function() {
+Puzzle.prototype.close = function () {
 	this._free_context();
 	this.libpuzzle.close();
 };
@@ -86,7 +86,7 @@ Puzzle.prototype.createCvecFromImageBinary = function (bytes) {
 	});
 };
 
-Puzzle.prototype.newCvec = function(callback) {
+Puzzle.prototype.newCvec = function (callback) {
 	var cvec = new PuzzleCvec();
 	this._init_cvec(P(cvec));
 	callback(cvec);
@@ -95,7 +95,7 @@ Puzzle.prototype.newCvec = function(callback) {
 	return new Cvec(vec);
 };
 
-Puzzle.prototype.vectorNormalizedDistance = function(cvec1, cvec2) {
+Puzzle.prototype.vectorNormalizedDistance = function (cvec1, cvec2) {
 	return this._vector_normalized_distance(
 		P(cvec1.createPuzzleCvec()),
 		P(cvec2.createPuzzleCvec()),
@@ -128,12 +128,12 @@ function Cvec(vec) {
 	this.vec = vec;
 }
 
-Cvec.prototype.createPuzzleCvec = function() {
+Cvec.prototype.createPuzzleCvec = function () {
 	return new PuzzleCvec(this.vec.length, this.vec);
 };
 
 
-Puzzle.prototype.declareFunctions = function() {
+Puzzle.prototype.declareFunctions = function () {
 	var self = this;
 	declare("puzzle_init_context", ctypes.void_t, []);
 	declare("puzzle_free_context", ctypes.void_t, []);
@@ -149,11 +149,11 @@ Puzzle.prototype.declareFunctions = function() {
 	function declare(name, returnValueType, argsType) {
 		var internal = getFunc(name, returnValueType, argsType);
 		var newName = name.replace(/^puzzle_/, "_");
-		self[newName] = function() {
+		self[newName] = function () {
 			var args = [P(this.puzzleContext)].concat(Array.slice(arguments));
 			// FunctionType.ptr には apply とか定義されていないので
 			// 可変長の引数を渡すには現状evalしかないっぽい
-			var s = "internal(" + args.map(function(arg, i) "args["+i+"]").join(", ") + ")";
+			var s = "internal(" + args.map(function (arg, i) "args["+i+"]").join(", ") + ")";
 			return eval(s);
 		};
 	}
