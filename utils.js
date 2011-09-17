@@ -1,8 +1,8 @@
 function Set(array) {
 	this.hash = {};
-	for (var i = 0; i < array.length; i ++) {
-		this.hash[array[i]] = true;
-	}
+	array.forEach(function (val) {
+		this.hash[val] = true;
+	});
 }
 
 Set.prototype.has = function (val) {
