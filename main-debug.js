@@ -30,7 +30,6 @@ with(t) {
 	};
 	REBLOG_INTERVAL_SEC = 0.5;
 	DOWNLOAD_INTERVAL_SEC = 2;
-	READPOST_INTERVAL_SEC = 0;
 	Tumblr.Post.prototype.getMediaURLs = Tumblr.Post.prototype.getThumbnailURLs;
 	commandTumblrLiked();
 }
