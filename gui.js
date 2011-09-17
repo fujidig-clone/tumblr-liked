@@ -68,7 +68,11 @@ GUI.prototype._start_onReceivePosts = function (posts) {
 	var button = this.doc.querySelector("button#run");
 	button.disabled = false;
 	button.addEventListener("click", this.run.bind(this), false);
-	this.changeStatus("");
+	if (posts.length > 0) {
+		this.changeStatus("");
+	} else {
+		this.changeStatus("there is no posts");
+	}
 	if (Config.enabledDuplicateChecker)
 		DuplicateChecker.start(this);
 };
