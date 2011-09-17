@@ -167,7 +167,7 @@ BlogImageCollector.prototype.collect = function () {
 	var puzzle = this.puzzle;
 	var store = storage.newMap("tumblrliked-blog-images", {store: true});
 	var storedData = store.get("data") || [];
-	var storedIds = storedData.map(function (x) x.id);
+	var storedIds = new Set(storedData.map(function (x) x.id));
 	return this.loadUnstored(storedIds).addCallback(function (latestImages) {
 		liberator.log("number of latest images is "+latestImages.length);
 		var latestData = latestImages.map(function (x) x.encode(puzzle));
@@ -184,7 +184,7 @@ BlogImageCollector.prototype.collect = function () {
 BlogImageCollector.prototype.loadUnstored = function (storedIds) {
 	var self = this;
 	var results = [];
-	var predicate = function (post) storedIds.indexOf(post.id) >= 0;
+	var predicate = function (post) storedIds.has(post.id);
 	var d = this.tumblr.readBlogPostsWithPredicate(Config.baseHostname, predicate);
 	return d.addCallback(function (posts) {
 		var images = [];

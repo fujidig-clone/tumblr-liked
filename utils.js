@@ -1,3 +1,14 @@
+function Set(array) {
+	this.hash = {};
+	for (var i = 0; i < array.length; i ++) {
+		this.hash[array[i]] = true;
+	}
+}
+
+Set.prototype.has = function (val) {
+	return val in this.hash;
+};
+
 function replaceElemText(node, text) {
 	var doc = node.ownerDocument;
 	node.innerHTML = "";
@@ -7,11 +18,6 @@ function replaceElemText(node, text) {
 function replaceElemChild(node, child) {
 	node.innerHTML = "";
 	node.appendChild(child);
-}
-
-function genRegexp(strings) {
-	return new RegExp("^(?:" + Array.map(strings, function(str)
-					str.replace(/\W/g,'\\$&')).join("|") + ")$");
 }
 
 function toAbsoluteURL(url, base) {

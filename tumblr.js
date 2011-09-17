@@ -13,9 +13,9 @@ Tumblr.prototype.readLikedPosts = function (num) {
 Tumblr.prototype.readLikedPostsUntilEncounterReblogged = function () {
 	var self = this;
 	return this.readBlogPosts(Config.baseHostname, RECENTLY_BLOG_POSTS_NUM).addCallback(function (posts) {
-		var keysRegexp = genRegexp(posts.map(function (post) post.reblog_key));
+		var keys = new Set(posts.map(function (post) post.reblog_key));
 		var terminatePredicate = function(allPosts, post) {
-			return keysRegexp.test(post.reblog_key);
+			return keys.has(post.reblog_key);
 		}
 		return self.readLikedPostsGeneric(terminatePredicate);
 	});
@@ -24,10 +24,10 @@ Tumblr.prototype.readLikedPostsUntilEncounterReblogged = function () {
 // こっちはブログとlikedを最後のページまでアクセスして正確に未リブログだけを集める
 Tumblr.prototype.readLikedPostsNotReblogged = function () {
 	return this.readBlogPosts(Config.baseHostname).addCallback(function (posts) {
-		var keysRegexp = genRegexp(posts.map(function (post) post.reblog-key));
+		var keys = new Set(posts.map(function (post) post.reblog_key));
 		var terminatePredicate = function(allPosts, post) false;
 		var rejectPredicate = function(allPosts, post) {
-			return keysRegexp.test(post.reblog_key);
+			return keys.has(post.reblog_key);
 		}
 		return self.readLikedPostsGeneric(terminatePredicate, rejectPredicate);
 	});
