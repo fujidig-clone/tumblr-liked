@@ -12,7 +12,7 @@ SimilarImageFinder.prototype.add = function(meta, binary) {
 };
 
 SimilarImageFinder.prototype.addByCvec = function (meta, cvec) {
-	var image = {meta: meta, cvec: cvec, index: this.images.length};
+	var image = {meta: meta, cvec: cvec};
 	this.images.push(image);
 	return image;
 };
