@@ -173,7 +173,7 @@ Tumblr.Post.prototype.getVideoURLs = function () {
 	if (this.type !== "video")
 		return [];
 	var embedCode = this.player.sort(function (a, b) a.width - b.width).reverse()[0].embed_code;
-	var matched = embedCode.match(/^renderVideo\("[^"]+",'([^']+)'/);
+	var matched = embedCode.match(/renderVideo\("[^"]+",'([^']+)'/);
 	return matched ? [matched[1]] : [];
 };
 
