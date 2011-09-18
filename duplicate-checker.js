@@ -11,6 +11,21 @@ DuplicateChecker.start = function (gui) {
 };
 
 DuplicateChecker.prototype.start = function () {
+	this.buildOutputElem();
+	this.changeStatus("collectings images...");
+
+	var puzzle = Puzzle.open();
+	var finder = new SimilarImageFinder(puzzle);
+	var d = this.collectImages(finder);
+	d.addCallback(this.checkDuplicate.bind(this, finder));
+	d.addBoth(function (x) {
+		puzzle.close();
+		return x;
+	});
+	d.addErrback(liberator.echoerr);
+};
+
+DuplicateChecker.prototype.buildOutputElem = function () {
 	var xml = <div id="duplicate-checker">
 		<h2>Duplicate Checker</h2>
 		<p class="status"/>
@@ -30,8 +45,6 @@ DuplicateChecker.prototype.start = function () {
 	this.outputElem = util.xmlToDom(xml, doc);
 	h1.parentNode.insertBefore(this.outputElem, h1.nextSibling);
 	doc.documentElement.appendChild(util.xmlToDom(style, doc));
-	this.changeStatus("collectings images...");
-	this.collectImages().addCallback(this.checkDuplicate.bind(this)).addErrback(liberator.echoerr);
 };
 
 DuplicateChecker.prototype.checkDuplicate = function (finder) {
@@ -44,7 +57,6 @@ DuplicateChecker.prototype.checkDuplicate0 = function (finder) {
 		return image1.meta.source === "blog" && image2.meta.source === "blog";
 	};
 	var result = finder.findAll(SIMILARITY_THRESHOLD, ignore);
-	finder.puzzle.close();
 	this.changeStatus("loading post data");
 	return this.loadPostsOfResult(result).addCallback(this.showResult.bind(this));
 };
@@ -84,9 +96,7 @@ DuplicateChecker.prototype.changeStatus = function (text) {
 	replaceElemText(this.outputElem.querySelector("p.status"), text);
 };
 
-DuplicateChecker.prototype.collectImages = function () {
-	var puzzle = Puzzle.open();
-	var finder = new SimilarImageFinder(puzzle);
+DuplicateChecker.prototype.collectImages = function (finder) {
 	var d = Async.succeed();
 	d.addCallback(this.addBlogImages.bind(this, finder));
 	d.addCallback(this.addLikedImages.bind(this, finder));
