@@ -1,7 +1,7 @@
 function Set(array) {
-	this.hash = {};
+	var hash = this.hash = {};
 	array.forEach(function (val) {
-		this.hash[val] = true;
+		hash[val] = true;
 	});
 }
 
