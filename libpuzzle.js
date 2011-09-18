@@ -8,7 +8,7 @@ function SimilarImageFinder(puzzle) {
 
 SimilarImageFinder.prototype.add = function (meta, binary) {
 	var cvec = this.puzzle.createCvecFromImageBinary(binary);
-	return this.addByCvec(meta, binary);
+	return this.addByCvec(meta, cvec);
 };
 
 SimilarImageFinder.prototype.addByCvec = function (meta, cvec) {
