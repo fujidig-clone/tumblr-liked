@@ -45,7 +45,6 @@ Tumblr.prototype.readLikedPostsGeneric = function (terminatePredicate, rejectPre
 	var allPosts = [];
 	const LIMIT = 20;
 	var offset = 0;
-	var count = 0;
 	var allCount;
 	function getAllCount() {
 		return api.infoUser().addCallback(function (res) {
@@ -57,7 +56,6 @@ Tumblr.prototype.readLikedPostsGeneric = function (terminatePredicate, rejectPre
 		return api.likes({offset: offset, limit: LIMIT}).addCallback(function (res) {
 			var posts = res.liked_posts;
 			offset += LIMIT;
-			count += posts.length;
 
 			for (var i = 0; i < posts.length; i ++) {
 				var post = Tumblr.wrapPost(posts[i]);
